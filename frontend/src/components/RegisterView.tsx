@@ -85,15 +85,12 @@ export default function RegisterView({ onVerified }: Props) {
     return (
         <div className="min-h-screen flex items-center justify-center px-4 py-10 md:py-16 botanical-reveal">
             <div className="w-full max-w-xl">
-                <div className="text-center mb-8 md:mb-10 botanical-reveal-slow">
-                    <div className="inline-flex items-center justify-center h-16 w-16 rounded-full soft-pill mb-4">
-                        <ShieldCheck className="h-7 w-7 text-[#8C9A84]" strokeWidth={1.5} />
-                    </div>
-                    <h1 className="font-display text-4xl md:text-5xl font-semibold leading-tight">
-                        Begin Your <span className="italic">Verification</span>
+                <div className="text-center mb-5 md:mb-6 botanical-reveal-slow">
+                    <h1 className="font-display text-3xl md:text-4xl font-semibold leading-tight">
+                        Unlock Your Carbon Revenue
                     </h1>
                     <p className="text-muted mt-2 text-sm md:text-base">
-                        A quick CRS identity check helps unlock trusted carbon-credit participation.
+                        We use CRS verification to ensure your data and carbon credits remain protected and authentic.
                     </p>
                 </div>
 
