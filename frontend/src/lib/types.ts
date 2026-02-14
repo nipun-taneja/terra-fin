@@ -118,4 +118,4 @@ export interface DashboardField {
     creditBalance: number;
 }
 
-export type AppView = "register" | "onboarding" | "dashboard";
+export type AppView = "landing" | "login" | "register" | "onboarding" | "dashboard" | "how-it-works";
