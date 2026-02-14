@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import RegisterView from "@/components/RegisterView";
@@ -11,19 +11,16 @@ export default function Home() {
   const [farm, setFarm] = useState<FarmConfig | null>(null);
   const [dashFields, setDashFields] = useState<DashboardField[]>([]);
 
-  // ── Section A → B ────────────────────
   const handleVerified = () => {
     setView("onboarding");
   };
 
-  // ── Section B → C ────────────────────
   const handleOnboardingComplete = (farmConfig: FarmConfig, fields: DashboardField[]) => {
     setFarm(farmConfig);
     setDashFields(fields);
     setView("dashboard");
   };
 
-  // ── Render ───────────────────────────
   if (view === "register") {
     return <RegisterView onVerified={handleVerified} />;
   }

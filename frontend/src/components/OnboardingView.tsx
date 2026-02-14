@@ -1,11 +1,10 @@
-"use client";
+﻿"use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import {
     Plus,
     Trash2,
     Loader2,
-    MapPin,
     Wheat,
     ArrowRight,
     ChevronDown,
@@ -27,6 +26,7 @@ interface LngLatLike {
 interface MapboxMapLike {
     addControl: (control: unknown, position?: string) => void;
     flyTo: (opts: { center: [number, number]; zoom: number; essential: boolean }) => void;
+    getCenter: () => LngLatLike;
     on: {
         (event: "click", cb: (evt: { lngLat: LngLatLike }) => void): void;
         (event: "load", cb: () => void): void;
@@ -88,6 +88,7 @@ interface GeoJsonFeatureCollectionLike {
 
 interface MapboxDrawLike {
     getAll: () => GeoJsonFeatureCollectionLike;
+    getMode: () => string;
 }
 
 interface MapboxDrawCtor {
@@ -124,8 +125,10 @@ const emptyBaseline = (): BaselineInputs => ({
     irrigation_events: 4,
 });
 
+const FIELD_DEFAULT_NAMES = ["North Field", "South Field", "East Field", "West Field"];
+
 const emptyField = (index: number): FieldConfig => ({
-    field_name: `Field ${String.fromCharCode(65 + index)}`,
+    field_name: FIELD_DEFAULT_NAMES[index] || `Field ${index + 1}`,
     latitude: 40.0,
     longitude: -89.0,
     area_value: 50,
@@ -157,6 +160,7 @@ export default function OnboardingView({ onComplete }: Props) {
     const [mapsError, setMapsError] = useState<string | null>(null);
     const [veteranStatus, setVeteranStatus] = useState("no");
     const [farmTenure, setFarmTenure] = useState("owned");
+    const [activeFieldTab, setActiveFieldTab] = useState(0);
 
     const mapContainerRef = useRef<HTMLDivElement | null>(null);
     const mapRef = useRef<MapboxMapLike | null>(null);
@@ -165,15 +169,20 @@ export default function OnboardingView({ onComplete }: Props) {
     const drawRef = useRef<MapboxDrawLike | null>(null);
     const searchWrapRef = useRef<HTMLDivElement | null>(null);
     const sessionTokenRef = useRef<string>(makeSessionToken());
+    const activeField = fields[activeFieldTab] || fields[0];
 
     const addField = () => {
         if (fields.length >= 4) return;
-        setFields([...fields, emptyField(fields.length)]);
+        const nextIndex = fields.length;
+        setFields([...fields, emptyField(nextIndex)]);
+        setActiveFieldTab(nextIndex);
     };
 
     const removeField = (idx: number) => {
         if (fields.length <= 1) return;
-        setFields(fields.filter((_, i) => i !== idx));
+        const next = fields.filter((_, i) => i !== idx);
+        setFields(next);
+        setActiveFieldTab((prev) => Math.max(0, Math.min(prev > idx ? prev - 1 : prev, next.length - 1)));
     };
 
     const updateField = useCallback((idx: number, patch: Partial<FieldConfig>) => {
@@ -182,6 +191,43 @@ export default function OnboardingView({ onComplete }: Props) {
 
     const updateBaseline = useCallback((idx: number, patch: Partial<BaselineInputs>) => {
         setFields((prev) => prev.map((f, i) => (i === idx ? { ...f, baseline: { ...f.baseline, ...patch } } : f)));
+    }, []);
+
+    const reverseGeocodeAndSyncFarm = useCallback(async (lng: number, lat: number) => {
+        const accessToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
+        if (!accessToken) return;
+        try {
+            const endpoint = `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json`;
+            const params = new URLSearchParams({
+                access_token: accessToken,
+                types: "address,place,region,country",
+                limit: "1",
+            });
+            const response = await fetch(`${endpoint}?${params.toString()}`);
+            if (!response.ok) return;
+            const data = (await response.json()) as GeocodeResponse;
+            const feature = data.features?.[0];
+            if (!feature) return;
+
+            let region = "";
+            let country = "";
+            for (const c of feature.context || []) {
+                if (typeof c.id === "string" && c.id.startsWith("region")) region = c.text || c.short_code || "";
+                if (typeof c.id === "string" && c.id.startsWith("country")) country = c.text || "";
+            }
+
+            const farmName = (feature.text || feature.place_name || "").split(",")[0];
+            setAddressQuery(feature.place_name || feature.text || "");
+            setFarm((prev) => ({
+                ...prev,
+                farm_name: farmName || prev.farm_name,
+                state: region || prev.state,
+                country: country || prev.country,
+            }));
+            setErrors((prev) => ({ ...prev, farm_name: "", state: "" }));
+        } catch {
+            // Keep existing values if reverse geocoding fails.
+        }
     }, []);
 
     const setPrimaryFieldCoords = useCallback((lng: number, lat: number) => {
@@ -222,11 +268,12 @@ export default function OnboardingView({ onComplete }: Props) {
                 const pos = markerRef.current?.getLngLat();
                 if (!pos) return;
                 setPrimaryFieldCoords(pos.lng, pos.lat);
+                reverseGeocodeAndSyncFarm(pos.lng, pos.lat);
             });
         } else {
             markerRef.current.setLngLat([lng, lat]);
         }
-    }, [setPrimaryFieldCoords]);
+    }, [reverseGeocodeAndSyncFarm, setPrimaryFieldCoords]);
 
     const applySelectedFeature = useCallback((feature: MapboxFeatureLike) => {
         const [lng, lat] = feature.center || [];
@@ -274,6 +321,12 @@ export default function OnboardingView({ onComplete }: Props) {
         setErrors(e);
         return Object.keys(e).length === 0;
     };
+
+    useEffect(() => {
+        if (activeFieldTab > fields.length - 1) {
+            setActiveFieldTab(Math.max(0, fields.length - 1));
+        }
+    }, [activeFieldTab, fields.length]);
 
     useEffect(() => {
         const onDocumentClick = (event: MouseEvent) => {
@@ -405,12 +458,15 @@ export default function OnboardingView({ onComplete }: Props) {
                 setMarker(lng, lat);
                 setPrimaryFieldCoords(lng, lat);
                 updatePrimaryFieldAreaFromSquareMeters(areaM2);
+                reverseGeocodeAndSyncFarm(lng, lat);
             };
 
             map.on("click", (evt: { lngLat: LngLatLike }) => {
+                if (draw.getMode() !== "simple_select") return;
                 const { lng, lat } = evt.lngLat;
                 setMarker(lng, lat);
                 setPrimaryFieldCoords(lng, lat);
+                reverseGeocodeAndSyncFarm(lng, lat);
             });
             map.on("draw.create", applyDrawnShapeToField);
             map.on("draw.update", applyDrawnShapeToField);
@@ -446,7 +502,7 @@ export default function OnboardingView({ onComplete }: Props) {
             drawRef.current = null;
             mapboxRef.current = null;
         };
-    }, [setMarker, setPrimaryFieldCoords, step, updatePrimaryFieldAreaFromSquareMeters]);
+    }, [reverseGeocodeAndSyncFarm, setMarker, setPrimaryFieldCoords, step, updatePrimaryFieldAreaFromSquareMeters]);
 
     useEffect(() => {
         if (step !== 0) return;
@@ -521,18 +577,18 @@ export default function OnboardingView({ onComplete }: Props) {
     const inputCls = (key: string) =>
         `w-full px-3 text-sm glass-input outline-none transition-all placeholder:text-white/30 ${errors[key]
             ? "border-red-400/70 focus:shadow-[0_0_0_2px_rgba(248,113,113,0.25)]"
-            : "focus:border-cyan-400"
+            : "focus:border-[#8C9A84]"
         }`;
 
     return (
-        <div className="min-h-screen">
+        <div className="min-h-screen botanical-reveal">
             <div className="max-w-4xl mx-auto px-4 py-10 pb-16">
                 <div className="overflow-hidden pb-2">
                     <div className="flex transition-transform duration-300" style={{ transform: `translateX(-${step * 100}%)` }}>
                         <div className="w-full shrink-0 pb-2">
-                            <div className="grid grid-cols-1 md:grid-cols-2 items-start gap-4 max-h-[74vh] overflow-y-auto pr-1">
-                                <div className="glass-card p-4 order-1">
-                                    <label className="block text-sm font-medium text-white/80 mb-2">Search Farm Address</label>
+                            <div className="grid grid-cols-1 md:grid-cols-2 items-start gap-6 stagger-md">
+                                <div className="glass-card card-lift p-6 order-1">
+                                    <label className="block text-sm font-medium text-[#2D3A31]/80 mb-2">Search Farm Address</label>
                                     <div className="relative" ref={searchWrapRef}>
                                         <input
                                             className={`${inputCls("")} w-full`}
@@ -545,15 +601,15 @@ export default function OnboardingView({ onComplete }: Props) {
                                             onFocus={() => setShowAddressSuggestions(true)}
                                         />
                                         {showAddressSuggestions && (addressSuggestions.length > 0 || isSearchingAddress) && (
-                                            <div className="absolute z-20 mt-2 w-full rounded-xl border border-white/15 bg-slate-950/95 backdrop-blur-md overflow-hidden shadow-xl">
+                                            <div className="absolute z-20 mt-2 w-full rounded-xl border border-[#E6E2DA] bg-white/95 backdrop-blur-md overflow-hidden shadow-xl">
                                                 {isSearchingAddress && (
-                                                    <div className="px-3 py-2 text-xs text-white/60">Searching...</div>
+                                                    <div className="px-3 py-2 text-xs text-[#2D3A31]/60">Searching...</div>
                                                 )}
                                                 {!isSearchingAddress && addressSuggestions.map((feature) => (
                                                     <button
                                                         key={feature.id}
                                                         type="button"
-                                                        className="w-full text-left px-3 py-2 text-sm text-white/85 hover:bg-white/10"
+                                                        className="w-full text-left px-3 py-2 text-sm text-[#2D3A31]/85 hover:bg-[#DCCFC2]/35"
                                                         onClick={() => {
                                                             applySelectedFeature(feature);
                                                             setShowAddressSuggestions(false);
@@ -567,39 +623,36 @@ export default function OnboardingView({ onComplete }: Props) {
                                             </div>
                                         )}
                                     </div>
-                                    <div ref={mapContainerRef} className="mt-3 w-full h-[260px] rounded-2xl border border-white/15 overflow-hidden" />
-                                    <p className="text-xs text-white/55 mt-2">
-                                        Start typing to autocomplete, then select an address to place it on the map. Use the polygon tool on the map to draw your farm boundary and auto-fill area.
-                                    </p>
-                                    {mapsError && <p className="text-xs text-amber-300 mt-2">{mapsError}</p>}
+                                    <div ref={mapContainerRef} className="mt-4 w-full h-[340px] rounded-2xl border border-[#E6E2DA] overflow-hidden image-drift" />
+                                    {mapsError && <p className="text-xs text-[#C27B66] mt-2">{mapsError}</p>}
                                 </div>
-                                <div className="glass-card p-6 order-2">
-                                    <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                                        <Wheat className="h-5 w-5 text-emerald-300" />
+                                <div className="glass-card card-lift p-7 order-2">
+                                    <h2 className="text-lg font-semibold text-[#2D3A31] mb-4 flex items-center gap-2">
+                                        <Wheat className="h-5 w-5 text-[#8C9A84]" />
                                         Farm Details
                                     </h2>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <div>
-                                            <label className="block text-sm font-medium text-white/80 mb-1">Farm Name <span className="text-red-400">*</span></label>
+                                            <label className="block text-sm font-medium text-[#2D3A31]/80 mb-1">Farm Name <span className="text-red-400">*</span></label>
                                             <input className={inputCls("farm_name")} placeholder="Green Acres Ranch" value={farm.farm_name} onChange={(e) => { setFarm({ ...farm, farm_name: e.target.value }); setErrors({ ...errors, farm_name: "" }); }} />
                                             {errors.farm_name && <p className="text-xs text-red-300 mt-1">{errors.farm_name}</p>}
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-white/80 mb-1">State / Region <span className="text-red-400">*</span></label>
+                                            <label className="block text-sm font-medium text-[#2D3A31]/80 mb-1">State / Region <span className="text-red-400">*</span></label>
                                             <input className={inputCls("state")} placeholder="Iowa" value={farm.state} onChange={(e) => { setFarm({ ...farm, state: e.target.value }); setErrors({ ...errors, state: "" }); }} />
                                             {errors.state && <p className="text-xs text-red-300 mt-1">{errors.state}</p>}
                                         </div>
                                         <div className="sm:col-span-2">
-                                            <label className="block text-sm font-medium text-white/80 mb-1">Country</label>
+                                            <label className="block text-sm font-medium text-[#2D3A31]/80 mb-1">Country</label>
                                             <input className={inputCls("country")} placeholder="United States" value={farm.country} onChange={(e) => setFarm({ ...farm, country: e.target.value })} />
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-white/80 mb-1">
+                                            <label className="block text-sm font-medium text-[#2D3A31]/80 mb-1">
                                                 <span className="inline-flex items-center gap-1">
                                                     Veteran Status
                                                     <span className="relative group inline-flex">
-                                                        <HelpCircle className="h-3.5 w-3.5 text-white/60" />
-                                                        <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 w-52 -translate-x-1/2 rounded-md border border-white/15 bg-slate-950/95 px-2 py-1 text-[11px] text-white/85 opacity-0 transition-opacity group-hover:opacity-100">
+                                                        <HelpCircle className="h-3.5 w-3.5 text-[#2D3A31]/60" />
+                                                        <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 w-52 -translate-x-1/2 rounded-md border border-[#E6E2DA] bg-white/95 px-2 py-1 text-[11px] text-[#2D3A31]/85 opacity-0 transition-opacity group-hover:opacity-100">
                                                             Better credit access for those who served.
                                                         </span>
                                                     </span>
@@ -610,18 +663,18 @@ export default function OnboardingView({ onComplete }: Props) {
                                                 value={veteranStatus}
                                                 onChange={(e) => setVeteranStatus(e.target.value)}
                                             >
-                                                <option value="yes" className="bg-slate-900">Yes</option>
-                                                <option value="no" className="bg-slate-900">No</option>
-                                                <option value="prefer_not" className="bg-slate-900">Prefer not to say</option>
+                                                <option value="yes" className="bg-white">Yes</option>
+                                                <option value="no" className="bg-white">No</option>
+                                                <option value="prefer_not" className="bg-white">Prefer not to say</option>
                                             </select>
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-white/80 mb-1">
+                                            <label className="block text-sm font-medium text-[#2D3A31]/80 mb-1">
                                                 <span className="inline-flex items-center gap-1">
                                                     Farm Tenure
                                                     <span className="relative group inline-flex">
-                                                        <HelpCircle className="h-3.5 w-3.5 text-white/60" />
-                                                        <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 w-56 -translate-x-1/2 rounded-md border border-white/15 bg-slate-950/95 px-2 py-1 text-[11px] text-white/85 opacity-0 transition-opacity group-hover:opacity-100">
+                                                        <HelpCircle className="h-3.5 w-3.5 text-[#2D3A31]/60" />
+                                                        <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 w-56 -translate-x-1/2 rounded-md border border-[#E6E2DA] bg-white/95 px-2 py-1 text-[11px] text-[#2D3A31]/85 opacity-0 transition-opacity group-hover:opacity-100">
                                                             So that your carbon credits stay with you wherever you farm.
                                                         </span>
                                                     </span>
@@ -632,95 +685,118 @@ export default function OnboardingView({ onComplete }: Props) {
                                                 value={farmTenure}
                                                 onChange={(e) => setFarmTenure(e.target.value)}
                                             >
-                                                <option value="owned" className="bg-slate-900">Owned</option>
-                                                <option value="leased" className="bg-slate-900">Leased</option>
+                                                <option value="owned" className="bg-white">Owned</option>
+                                                <option value="leased" className="bg-white">Leased</option>
                                             </select>
                                         </div>
                                     </div>
+                                    <div className="mt-6 flex justify-end">
+                                        <button
+                                            onClick={() => validateFarmStep() && setStep(1)}
+                                            aria-label="Next"
+                                            className="h-11 w-11 rounded-full btn-glass-primary flex items-center justify-center"
+                                        >
+                                            <ArrowRight className="h-5 w-5" />
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
-                            <div className="mt-6">
-                                <button onClick={() => validateFarmStep() && setStep(1)} className="w-full py-3 btn-glass-primary font-semibold text-sm flex items-center justify-center gap-2">
-                                    Next <ArrowRight className="h-5 w-5" />
-                                </button>
                             </div>
                         </div>
 
                         <div className="w-full shrink-0">
-                            <div className="space-y-4">
-                                {fields.map((field, idx) => (
-                                    <div key={idx} className="glass-card p-6">
-                                        <div className="flex items-center justify-between mb-4">
-                                            <h3 className="text-base font-semibold text-white flex items-center gap-2">
-                                                <MapPin className="h-4 w-4 text-emerald-300" />{field.field_name || `Field ${idx + 1}`}
-                                            </h3>
-                                            {fields.length > 1 && (
-                                                <button onClick={() => removeField(idx)} className="text-xs text-white/50 hover:text-red-300 flex items-center gap-1 transition-colors">
-                                                    <Trash2 className="h-3.5 w-3.5" /> Remove
-                                                </button>
-                                            )}
+                            <div className="glass-card card-lift p-4">
+                                <div className="flex items-center justify-between gap-3 border-b border-[#E6E2DA] pb-3 mb-4">
+                                    <div className="flex gap-2 overflow-x-auto pr-1">
+                                        {fields.map((f, idx) => (
+                                            <button
+                                                key={idx}
+                                                type="button"
+                                                onClick={() => setActiveFieldTab(idx)}
+                                                className={`px-3 py-1.5 text-xs rounded-full border transition-colors whitespace-nowrap ${idx === activeFieldTab
+                                                    ? "bg-[#8C9A84]/15 border-[#8C9A84] text-[#2D3A31]"
+                                                    : "bg-white border-[#E6E2DA] text-[#2D3A31]/70 hover:border-[#8C9A84]"
+                                                    }`}
+                                            >
+                                                {f.field_name || `Field ${idx + 1}`}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        {fields.length > 1 && (
+                                            <button
+                                                onClick={() => removeField(activeFieldTab)}
+                                                className="text-xs text-[#2D3A31]/60 hover:text-red-500 flex items-center gap-1 transition-colors"
+                                            >
+                                                <Trash2 className="h-3.5 w-3.5" /> Remove
+                                            </button>
+                                        )}
+                                        {fields.length < 4 && (
+                                            <button
+                                                onClick={addField}
+                                                className="px-3 py-1.5 text-xs rounded-full border border-[#DCCFC2] text-[#2D3A31]/75 hover:border-[#8C9A84] hover:text-[#8C9A84] transition-colors flex items-center gap-1"
+                                            >
+                                                <Plus className="h-3.5 w-3.5" /> Add
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {activeField && (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-xs font-medium text-[#2D3A31]/60 mb-1">Field Name *</label>
+                                            <input className={inputCls(`field_${activeFieldTab}_name`)} value={activeField.field_name} onChange={(e) => updateField(activeFieldTab, { field_name: e.target.value })} />
+                                            {errors[`field_${activeFieldTab}_name`] && <p className="text-xs text-red-300 mt-1">{errors[`field_${activeFieldTab}_name`]}</p>}
                                         </div>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="block text-xs font-medium text-white/60 mb-1">Field Name *</label>
-                                                <input className={inputCls(`field_${idx}_name`)} value={field.field_name} onChange={(e) => updateField(idx, { field_name: e.target.value })} />
-                                                {errors[`field_${idx}_name`] && <p className="text-xs text-red-300 mt-1">{errors[`field_${idx}_name`]}</p>}
+                                        <div>
+                                            <label className="block text-xs font-medium text-[#2D3A31]/60 mb-1">Crop Type</label>
+                                            <div className="relative">
+                                                <select className={`${inputCls("")} appearance-none pr-8`} value={activeField.crop_type} onChange={(e) => updateField(activeFieldTab, { crop_type: e.target.value })}>
+                                                    {CROP_OPTIONS.map((o) => <option key={o.value} value={o.value} className="bg-white">{o.label}</option>)}
+                                                </select>
+                                                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#2D3A31]/50 pointer-events-none" />
                                             </div>
-                                            <div>
-                                                <label className="block text-xs font-medium text-white/60 mb-1">Crop Type</label>
-                                                <div className="relative">
-                                                    <select className={`${inputCls("")} appearance-none pr-8`} value={field.crop_type} onChange={(e) => updateField(idx, { crop_type: e.target.value })}>
-                                                        {CROP_OPTIONS.map((o) => <option key={o.value} value={o.value} className="bg-slate-900">{o.label}</option>)}
-                                                    </select>
-                                                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/50 pointer-events-none" />
-                                                </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-medium text-[#2D3A31]/60 mb-1">Latitude</label>
+                                            <input type="number" step="0.0001" className={inputCls("")} value={activeField.latitude} onChange={(e) => updateField(activeFieldTab, { latitude: parseFloat(e.target.value) || 0 })} />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-medium text-[#2D3A31]/60 mb-1">Longitude</label>
+                                            <input type="number" step="0.0001" className={inputCls("")} value={activeField.longitude} onChange={(e) => updateField(activeFieldTab, { longitude: parseFloat(e.target.value) || 0 })} />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-medium text-[#2D3A31]/60 mb-1">Area *</label>
+                                            <div className="flex gap-2">
+                                                <input type="number" className={`${inputCls(`field_${activeFieldTab}_area`)} flex-1`} value={activeField.area_value} onChange={(e) => updateField(activeFieldTab, { area_value: parseFloat(e.target.value) || 0 })} />
+                                                <select className="px-3 glass-input text-sm outline-none bg-white/80" value={activeField.area_unit} onChange={(e) => updateField(activeFieldTab, { area_unit: e.target.value as "acre" | "hectare" })}>
+                                                    <option value="acre" className="bg-white">Acres</option>
+                                                    <option value="hectare" className="bg-white">Hectares</option>
+                                                </select>
                                             </div>
-                                            <div>
-                                                <label className="block text-xs font-medium text-white/60 mb-1">Latitude</label>
-                                                <input type="number" step="0.0001" className={inputCls("")} value={field.latitude} onChange={(e) => updateField(idx, { latitude: parseFloat(e.target.value) || 0 })} />
+                                            {errors[`field_${activeFieldTab}_area`] && <p className="text-xs text-red-300 mt-1">{errors[`field_${activeFieldTab}_area`]}</p>}
+                                        </div>
+                                        <div />
+                                        <div>
+                                            <label className="block text-xs font-medium text-[#2D3A31]/60 mb-1 flex items-center gap-1">
+                                                Tillage Passes <HelpCircle className="h-3 w-3 text-[#2D3A31]/50" />
+                                            </label>
+                                            <input type="number" min={0} className={inputCls("")} value={activeField.baseline.tillage_passes} onChange={(e) => updateBaseline(activeFieldTab, { tillage_passes: parseInt(e.target.value) || 0 })} />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-medium text-[#2D3A31]/60 mb-1">Fertilizer Amount</label>
+                                            <div className="flex gap-2">
+                                                <input type="number" min={0} className={`${inputCls("")} flex-1`} value={activeField.baseline.fertilizer_amount} onChange={(e) => updateBaseline(activeFieldTab, { fertilizer_amount: parseFloat(e.target.value) || 0 })} />
+                                                <select className="px-2 glass-input text-xs outline-none bg-white/80" value={activeField.baseline.fertilizer_unit} onChange={(e) => updateBaseline(activeFieldTab, { fertilizer_unit: e.target.value as BaselineInputs["fertilizer_unit"] })}>
+                                                    {FERT_UNITS.map((u) => <option key={u.value} value={u.value} className="bg-white">{u.label}</option>)}
+                                                </select>
                                             </div>
-                                            <div>
-                                                <label className="block text-xs font-medium text-white/60 mb-1">Longitude</label>
-                                                <input type="number" step="0.0001" className={inputCls("")} value={field.longitude} onChange={(e) => updateField(idx, { longitude: parseFloat(e.target.value) || 0 })} />
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-medium text-white/60 mb-1">Area *</label>
-                                                <div className="flex gap-2">
-                                                    <input type="number" className={`${inputCls(`field_${idx}_area`)} flex-1`} value={field.area_value} onChange={(e) => updateField(idx, { area_value: parseFloat(e.target.value) || 0 })} />
-                                                    <select className="px-3 glass-input text-sm outline-none bg-black/30" value={field.area_unit} onChange={(e) => updateField(idx, { area_unit: e.target.value as "acre" | "hectare" })}>
-                                                        <option value="acre" className="bg-slate-900">Acres</option>
-                                                        <option value="hectare" className="bg-slate-900">Hectares</option>
-                                                    </select>
-                                                </div>
-                                                {errors[`field_${idx}_area`] && <p className="text-xs text-red-300 mt-1">{errors[`field_${idx}_area`]}</p>}
-                                            </div>
-                                            <div />
-                                            <div>
-                                                <label className="block text-xs font-medium text-white/60 mb-1 flex items-center gap-1">
-                                                    Tillage Passes <HelpCircle className="h-3 w-3 text-white/50" />
-                                                </label>
-                                                <input type="number" min={0} className={inputCls("")} value={field.baseline.tillage_passes} onChange={(e) => updateBaseline(idx, { tillage_passes: parseInt(e.target.value) || 0 })} />
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-medium text-white/60 mb-1">Fertilizer Amount</label>
-                                                <div className="flex gap-2">
-                                                    <input type="number" min={0} className={`${inputCls("")} flex-1`} value={field.baseline.fertilizer_amount} onChange={(e) => updateBaseline(idx, { fertilizer_amount: parseFloat(e.target.value) || 0 })} />
-                                                    <select className="px-2 glass-input text-xs outline-none bg-black/30" value={field.baseline.fertilizer_unit} onChange={(e) => updateBaseline(idx, { fertilizer_unit: e.target.value as BaselineInputs["fertilizer_unit"] })}>
-                                                        {FERT_UNITS.map((u) => <option key={u.value} value={u.value} className="bg-slate-900">{u.label}</option>)}
-                                                    </select>
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-medium text-white/60 mb-1">Irrigation Events</label>
-                                                <input type="number" min={0} className={inputCls("")} value={field.baseline.irrigation_events} onChange={(e) => updateBaseline(idx, { irrigation_events: parseInt(e.target.value) || 0 })} />
-                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-medium text-[#2D3A31]/60 mb-1">Irrigation Events</label>
+                                            <input type="number" min={0} className={inputCls("")} value={activeField.baseline.irrigation_events} onChange={(e) => updateBaseline(activeFieldTab, { irrigation_events: parseInt(e.target.value) || 0 })} />
                                         </div>
                                     </div>
-                                ))}
-                                {fields.length < 4 && (
-                                    <button onClick={addField} className="w-full py-3 border-2 border-dashed border-white/20 rounded-2xl text-sm font-medium text-white/70 hover:border-emerald-400/60 hover:text-emerald-300 transition-colors flex items-center justify-center gap-2 glass-secondary">
-                                        <Plus className="h-4 w-4" /> Add Field ({fields.length}/4)
-                                    </button>
                                 )}
                             </div>
                         </div>
@@ -731,8 +807,8 @@ export default function OnboardingView({ onComplete }: Props) {
                     <div className="mt-6 glass-card p-4 space-y-2">
                         {progress.map((msg, i) => (
                             <div key={i} className="flex items-center gap-2 text-sm">
-                                {msg.startsWith("+") ? <CheckCircle2 className="h-4 w-4 text-emerald-300 flex-shrink-0" /> : msg.startsWith("!") ? <span className="text-amber-300 flex-shrink-0">!</span> : <Loader2 className="h-4 w-4 text-cyan-300 animate-spin flex-shrink-0" />}
-                                <span className="text-white/80">{msg}</span>
+                                {msg.startsWith("+") ? <CheckCircle2 className="h-4 w-4 text-[#8C9A84] flex-shrink-0" /> : msg.startsWith("!") ? <span className="text-[#C27B66] flex-shrink-0">!</span> : <Loader2 className="h-4 w-4 text-[#C27B66] animate-spin flex-shrink-0" />}
+                                <span className="text-[#2D3A31]/80">{msg}</span>
                             </div>
                         ))}
                     </div>
@@ -741,7 +817,7 @@ export default function OnboardingView({ onComplete }: Props) {
                 <div className="mt-6">
                     {step === 1 && (
                         <div className="flex gap-2">
-                            <button onClick={() => setStep(0)} className="w-1/3 py-4 glass-secondary rounded-full text-white/80 font-semibold">Back</button>
+                            <button onClick={() => setStep(0)} className="w-1/3 py-4 glass-secondary rounded-full text-[#2D3A31]/80 font-semibold">Back</button>
                             <button onClick={handleAnalyze} disabled={analyzing} className="w-2/3 py-4 btn-glass-primary font-bold text-base flex items-center justify-center gap-2 disabled:opacity-60">
                                 {analyzing ? <><Loader2 className="h-5 w-5 animate-spin" />Analyzing Fields...</> : <>Save and Run Baseline Analysis <ArrowRight className="h-5 w-5" /></>}
                             </button>
