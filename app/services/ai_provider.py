@@ -1,5 +1,6 @@
-from __future__ import annotations
-
+"""
+AI roadmap generator using Google Gemini.
+"""
 import json
 import os
 from typing import List, Tuple, Dict, Any

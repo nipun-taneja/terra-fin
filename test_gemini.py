@@ -1,3 +1,6 @@
+"""
+Integration test for Google Gemini API connectivity.
+"""
 import os
 from dotenv import load_dotenv
 from google import genai

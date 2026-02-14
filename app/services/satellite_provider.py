@@ -1,5 +1,9 @@
+"""
+Satellite data provider stubs for NDVI and cropland confidence.
+"""
 from __future__ import annotations
 
+from typing import Dict, Tuple
 import hashlib
 from dataclasses import dataclass
 

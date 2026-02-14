@@ -1,6 +1,7 @@
-from __future__ import annotations
-
-from typing import Optional
+"""
+Credibility API router for farmer identity and risk verification stubs.
+"""
+from typing import Optional, List
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
@@ -8,6 +9,7 @@ router = APIRouter()
 
 
 class CredibilityRequest(BaseModel):
+    """Request schema for checking farmer credibility."""
     farmer_name: str = Field(..., min_length=1)
     phone: Optional[str] = None
     email: Optional[str] = None
@@ -16,17 +18,19 @@ class CredibilityRequest(BaseModel):
 
 
 class CredibilityResponse(BaseModel):
+    """Response schema for farmer credibility check."""
     credible: bool
     score: float  # 0..1
-    flags: list[str]
+    flags: List[str]
 
 
 @router.post("/api/credibility/check", response_model=CredibilityResponse)
 def check_credibility(req: CredibilityRequest) -> CredibilityResponse:
     """
+    Check if a farmer is credible using CRS checks.
+    
     Hackathon stub:
-    - Later: replace with CRS API call (server-side, keep keys private).
-    - For now: return deterministic-ish results so demo is stable.
+    - Returns deterministic results for demo stability.
     """
     name_key = (req.farmer_name or "").strip().lower()
 
