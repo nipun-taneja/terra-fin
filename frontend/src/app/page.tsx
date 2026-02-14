@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import RegisterView from "@/components/RegisterView";
@@ -10,26 +10,38 @@ export default function Home() {
   const [view, setView] = useState<AppView>("register");
   const [farm, setFarm] = useState<FarmConfig | null>(null);
   const [dashFields, setDashFields] = useState<DashboardField[]>([]);
+  const [editingFromDashboard, setEditingFromDashboard] = useState(false);
 
-  // ── Section A → B ────────────────────
   const handleVerified = () => {
+    setEditingFromDashboard(false);
     setView("onboarding");
   };
 
-  // ── Section B → C ────────────────────
   const handleOnboardingComplete = (farmConfig: FarmConfig, fields: DashboardField[]) => {
     setFarm(farmConfig);
     setDashFields(fields);
+    setEditingFromDashboard(false);
     setView("dashboard");
   };
 
-  // ── Render ───────────────────────────
+  const handleDashboardBack = () => {
+    setEditingFromDashboard(true);
+    setView("onboarding");
+  };
+
   if (view === "register") {
     return <RegisterView onVerified={handleVerified} />;
   }
 
   if (view === "onboarding") {
-    return <OnboardingView onComplete={handleOnboardingComplete} />;
+    return (
+      <OnboardingView
+        onComplete={handleOnboardingComplete}
+        initialFarm={editingFromDashboard ? farm : null}
+        initialFields={editingFromDashboard ? dashFields : undefined}
+        initialStep={editingFromDashboard ? 1 : 0}
+      />
+    );
   }
 
   if (view === "dashboard" && farm) {
@@ -38,6 +50,8 @@ export default function Home() {
         farm={farm}
         fields={dashFields}
         onFieldsChange={setDashFields}
+        onBack={handleDashboardBack}
+        onEditReanalyze={handleDashboardBack}
       />
     );
   }
