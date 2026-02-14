@@ -12,21 +12,13 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 // ─── CRS Identity Verification ──────────────────────────────
 export async function verifyCRS(req: CRSRequest): Promise<CRSResponse> {
-    // TODO: swap mock for real when backend /api/credibility/check is production-ready
-    try {
-        const res = await fetch(`${API_BASE}/api/credibility/check`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(req),
-        });
-        if (!res.ok) throw new Error(`CRS check failed: ${res.status}`);
-        return res.json();
-    } catch {
-        // Mock fallback for demo
-        console.warn("[api] CRS call failed, using mock");
-        await delay(1500);
-        return { credible: true, score: 0.85, flags: [] };
-    }
+    const res = await fetch(`${API_BASE}/api/credibility/check`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(req),
+    });
+    if (!res.ok) throw new Error(`CRS check failed: ${res.status}`);
+    return res.json();
 }
 
 // ─── Field Analysis ──────────────────────────────────────────
