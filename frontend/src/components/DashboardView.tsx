@@ -27,10 +27,9 @@ interface Props {
     fields: DashboardField[];
     onFieldsChange: (fields: DashboardField[]) => void;
     onBack: () => void;
-    onEditReanalyze: () => void;
 }
 
-export default function DashboardView({ farm, fields, onFieldsChange, onBack, onEditReanalyze }: Props) {
+export default function DashboardView({ farm, fields, onFieldsChange, onBack }: Props) {
     const [activeTab, setActiveTab] = useState(0);
     const [expandedStep, setExpandedStep] = useState<string | null>(null);
     const [toast, setToast] = useState<{ msg: string; undoIdx: number; stepId: string } | null>(null);
@@ -136,14 +135,6 @@ export default function DashboardView({ farm, fields, onFieldsChange, onBack, on
             </header>
 
             <div id="dashboard-main" className="max-w-7xl mx-auto px-4 md:px-6 py-8 space-y-8">
-                <div className="flex items-center justify-between gap-3">
-                    <a href="#dashboard-steps" className="text-xs btn-organic-secondary px-3 py-1.5 inline-flex items-center gap-1">
-                        <ChevronDown className="h-3.5 w-3.5" /> Scroll Down
-                    </a>
-                    <button onClick={onEditReanalyze} className="text-xs btn-organic-secondary px-3 py-1.5">
-                        Edit Fields and Re-analyze
-                    </button>
-                </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-5 stagger-md">
                     <div className="glass-card card-lift p-6">
                         <div className="text-xs font-semibold tracking-[0.16em] uppercase text-muted mb-2">Baseline Carbon Estimate</div>
@@ -213,10 +204,6 @@ export default function DashboardView({ farm, fields, onFieldsChange, onBack, on
                                     transition: "width 500ms ease-out",
                                 }}
                             />
-                        </div>
-                        <div className="mt-3 flex gap-2">
-                            <span className="px-3 py-1 text-[11px] rounded-full border border-[#8C9A84]/50 text-[#6F7D73] bg-[#8C9A84]/10">EQIP Active</span>
-                            <span className="px-3 py-1 text-[11px] rounded-full border border-[#C27B66]/45 text-[#A46958] bg-[#C27B66]/10">CSP Active</span>
                         </div>
                     </div>
 

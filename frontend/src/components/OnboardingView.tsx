@@ -597,17 +597,16 @@ export default function OnboardingView({ onComplete, initialFarm, initialFields,
 
     return (
         <div className="min-h-screen botanical-reveal">
-            <div className="max-w-4xl mx-auto px-4 py-10 pb-16">
+            <div className="max-w-4xl mx-auto px-4 py-8 pb-10">
                 <div className="overflow-hidden pb-2">
-                    <div className="flex transition-transform duration-300" style={{ transform: `translateX(-${step * 100}%)` }}>
-                        <div className="w-full shrink-0 pb-2">
-                            <div className="grid grid-cols-1 md:grid-cols-2 items-stretch gap-6 stagger-md">
-                                <div className="glass-card card-lift p-6 order-1 h-full min-h-[560px] flex flex-col">
-                                    <label className="block text-sm font-medium text-[#2D3A31]/80 mb-2">Search Farm Address</label>
+                    {step === 0 && (
+                        <div className="w-full pb-2">
+                            <div className="grid grid-cols-1 md:grid-cols-2 items-stretch gap-5">
+                                <div className="glass-card card-lift p-6 order-1 h-full min-h-[500px] flex flex-col">
                                     <div className="relative" ref={searchWrapRef}>
                                         <input
                                             className={`${inputCls("")} w-full`}
-                                            placeholder="Start typing an address..."
+                                            placeholder="Search Farm Address"
                                             value={addressQuery}
                                             onChange={(e) => {
                                                 setAddressQuery(e.target.value);
@@ -638,15 +637,15 @@ export default function OnboardingView({ onComplete, initialFarm, initialFields,
                                             </div>
                                         )}
                                     </div>
-                                    <div ref={mapContainerRef} className="mt-4 w-full flex-1 min-h-[420px] rounded-2xl border border-[#E6E2DA] overflow-hidden image-drift" />
+                                    <div ref={mapContainerRef} className="mt-3 w-full flex-1 min-h-[320px] rounded-2xl border border-[#E6E2DA] overflow-hidden image-drift" />
                                     {mapsError && <p className="text-xs text-[#C27B66] mt-2">{mapsError}</p>}
                                 </div>
-                                <div className="glass-card card-lift p-7 order-2 h-full min-h-[560px] flex flex-col">
-                                    <h2 className="text-lg font-semibold text-[#2D3A31] mb-4 flex items-center gap-2">
+                                <div className="glass-card card-lift p-6 order-2 h-full min-h-[500px] flex flex-col">
+                                    <h2 className="text-lg font-semibold text-[#2D3A31] mb-3 flex items-center gap-2">
                                         <Wheat className="h-5 w-5 text-[#8C9A84]" />
                                         Farm Details
                                     </h2>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 flex-1">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start content-start flex-1">
                                         <div>
                                             <label className="block text-sm font-medium text-[#2D3A31]/80 mb-1">Farm Name <span className="text-red-400">*</span></label>
                                             <input className={inputCls("farm_name")} placeholder="Green Acres Ranch" value={farm.farm_name} onChange={(e) => { setFarm({ ...farm, farm_name: e.target.value }); setErrors({ ...errors, farm_name: "" }); }} />
@@ -705,7 +704,7 @@ export default function OnboardingView({ onComplete, initialFarm, initialFields,
                                             </select>
                                         </div>
                                     </div>
-                                    <div className="mt-6 flex justify-end">
+                                    <div className="mt-4 flex justify-end">
                                         <button
                                             onClick={() => validateFarmStep() && setStep(1)}
                                             aria-label="Next"
@@ -717,8 +716,10 @@ export default function OnboardingView({ onComplete, initialFarm, initialFields,
                                 </div>
                             </div>
                         </div>
+                    )}
 
-                        <div className="w-full shrink-0">
+                    {step === 1 && (
+                        <div className="w-full">
                             <div className="glass-card card-lift p-4">
                                 <div className="flex items-center justify-between gap-3 border-b border-[#E6E2DA] pb-3 mb-4">
                                     <div className="flex gap-2 overflow-x-auto pr-1">
@@ -773,12 +774,12 @@ export default function OnboardingView({ onComplete, initialFarm, initialFields,
                                             </div>
                                         </div>
                                         <div>
-                                            <label className="block text-xs font-medium text-[#2D3A31]/60 mb-1">Latitude</label>
-                                            <input type="number" step="0.0001" className={inputCls("")} value={activeField.latitude} onChange={(e) => updateField(activeFieldTab, { latitude: parseFloat(e.target.value) || 0 })} />
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-medium text-[#2D3A31]/60 mb-1">Longitude</label>
-                                            <input type="number" step="0.0001" className={inputCls("")} value={activeField.longitude} onChange={(e) => updateField(activeFieldTab, { longitude: parseFloat(e.target.value) || 0 })} />
+                                            <label className="block text-xs font-medium text-[#2D3A31]/60 mb-1">Lat / Long</label>
+                                            <div className="h-[46px] px-3 rounded-full border border-[#E6E2DA] bg-[#F2EFE8]/70 flex items-center text-sm text-[#2D3A31]/80">
+                                                {Number.isFinite(activeField.latitude) && Number.isFinite(activeField.longitude)
+                                                    ? `${activeField.latitude.toFixed(6)} / ${activeField.longitude.toFixed(6)}`
+                                                    : "-"}
+                                            </div>
                                         </div>
                                         <div>
                                             <label className="block text-xs font-medium text-[#2D3A31]/60 mb-1">Area *</label>
@@ -791,31 +792,32 @@ export default function OnboardingView({ onComplete, initialFarm, initialFields,
                                             </div>
                                             {errors[`field_${activeFieldTab}_area`] && <p className="text-xs text-red-300 mt-1">{errors[`field_${activeFieldTab}_area`]}</p>}
                                         </div>
-                                        <div />
-                                        <div>
-                                            <label className="block text-xs font-medium text-[#2D3A31]/60 mb-1 flex items-center gap-1">
-                                                Tillage Passes <HelpCircle className="h-3 w-3 text-[#2D3A31]/50" />
-                                            </label>
-                                            <input type="number" min={0} className={inputCls("")} value={activeField.baseline.tillage_passes} onChange={(e) => updateBaseline(activeFieldTab, { tillage_passes: parseInt(e.target.value) || 0 })} />
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-medium text-[#2D3A31]/60 mb-1">Fertilizer Amount</label>
-                                            <div className="flex gap-2">
-                                                <input type="number" min={0} className={`${inputCls("")} flex-1`} value={activeField.baseline.fertilizer_amount} onChange={(e) => updateBaseline(activeFieldTab, { fertilizer_amount: parseFloat(e.target.value) || 0 })} />
-                                                <select className="px-2 glass-input text-xs outline-none bg-white/80" value={activeField.baseline.fertilizer_unit} onChange={(e) => updateBaseline(activeFieldTab, { fertilizer_unit: e.target.value as BaselineInputs["fertilizer_unit"] })}>
-                                                    {FERT_UNITS.map((u) => <option key={u.value} value={u.value} className="bg-white">{u.label}</option>)}
-                                                </select>
+                                        <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                            <div>
+                                                <label className="block text-xs font-medium text-[#2D3A31]/60 mb-1 flex items-center gap-1">
+                                                    Tillage Passes <HelpCircle className="h-3 w-3 text-[#2D3A31]/50" />
+                                                </label>
+                                                <input type="number" min={0} className={inputCls("")} value={activeField.baseline.tillage_passes} onChange={(e) => updateBaseline(activeFieldTab, { tillage_passes: parseInt(e.target.value) || 0 })} />
                                             </div>
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-medium text-[#2D3A31]/60 mb-1">Irrigation Events</label>
-                                            <input type="number" min={0} className={inputCls("")} value={activeField.baseline.irrigation_events} onChange={(e) => updateBaseline(activeFieldTab, { irrigation_events: parseInt(e.target.value) || 0 })} />
+                                            <div>
+                                                <label className="block text-xs font-medium text-[#2D3A31]/60 mb-1">Fertilizer Amount</label>
+                                                <div className="flex gap-2">
+                                                    <input type="number" min={0} className={`${inputCls("")} flex-1`} value={activeField.baseline.fertilizer_amount} onChange={(e) => updateBaseline(activeFieldTab, { fertilizer_amount: parseFloat(e.target.value) || 0 })} />
+                                                    <select className="px-2 glass-input text-xs outline-none bg-white/80" value={activeField.baseline.fertilizer_unit} onChange={(e) => updateBaseline(activeFieldTab, { fertilizer_unit: e.target.value as BaselineInputs["fertilizer_unit"] })}>
+                                                        {FERT_UNITS.map((u) => <option key={u.value} value={u.value} className="bg-white">{u.label}</option>)}
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-medium text-[#2D3A31]/60 mb-1">Irrigation Events</label>
+                                                <input type="number" min={0} className={inputCls("")} value={activeField.baseline.irrigation_events} onChange={(e) => updateBaseline(activeFieldTab, { irrigation_events: parseInt(e.target.value) || 0 })} />
+                                            </div>
                                         </div>
                                     </div>
                                 )}
                             </div>
                         </div>
-                    </div>
+                    )}
                 </div>
 
                 {analyzing && progress.length > 0 && (
@@ -829,11 +831,11 @@ export default function OnboardingView({ onComplete, initialFarm, initialFields,
                     </div>
                 )}
 
-                <div className="mt-6">
+                <div className="mt-3">
                     {step === 1 && (
                         <div className="flex gap-2">
-                            <button onClick={() => setStep(0)} className="w-1/3 py-4 glass-secondary rounded-full text-[#2D3A31]/80 font-semibold">Back</button>
-                            <button onClick={handleAnalyze} disabled={analyzing} className="w-2/3 py-4 btn-glass-primary font-bold text-base flex items-center justify-center gap-2 disabled:opacity-60">
+                            <button onClick={() => setStep(0)} className="w-1/3 py-3 glass-secondary rounded-full text-[#2D3A31]/80 font-semibold">Back</button>
+                            <button onClick={handleAnalyze} disabled={analyzing} className="w-2/3 py-3 btn-glass-primary font-bold text-base flex items-center justify-center gap-2 disabled:opacity-60">
                                 {analyzing ? <><Loader2 className="h-5 w-5 animate-spin" />Analyzing Fields...</> : <>Save and Run Baseline Analysis <ArrowRight className="h-5 w-5" /></>}
                             </button>
                         </div>

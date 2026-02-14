@@ -52,7 +52,9 @@ h6 {
 
   .map-shell {
     position: relative;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
   }
 
   .glass-card {
