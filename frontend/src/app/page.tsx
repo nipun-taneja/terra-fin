@@ -51,7 +51,6 @@ export default function Home() {
         fields={dashFields}
         onFieldsChange={setDashFields}
         onBack={handleDashboardBack}
-        onEditReanalyze={handleDashboardBack}
       />
     );
   }
