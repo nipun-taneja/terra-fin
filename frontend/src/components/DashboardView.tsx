@@ -11,8 +11,7 @@ import {
     Undo2,
     Leaf,
     BarChart3,
-    Plus,
-    RefreshCw,
+    ArrowLeft,
 } from "lucide-react";
 import {
     AreaChart,
@@ -27,9 +26,11 @@ interface Props {
     farm: FarmConfig;
     fields: DashboardField[];
     onFieldsChange: (fields: DashboardField[]) => void;
+    onBack: () => void;
+    onEditReanalyze: () => void;
 }
 
-export default function DashboardView({ farm, fields, onFieldsChange }: Props) {
+export default function DashboardView({ farm, fields, onFieldsChange, onBack, onEditReanalyze }: Props) {
     const [activeTab, setActiveTab] = useState(0);
     const [expandedStep, setExpandedStep] = useState<string | null>(null);
     const [toast, setToast] = useState<{ msg: string; undoIdx: number; stepId: string } | null>(null);
@@ -125,18 +126,24 @@ export default function DashboardView({ farm, fields, onFieldsChange }: Props) {
                             <p className="text-sm text-muted">{farm.state}{farm.country ? `, ${farm.country}` : ""}</p>
                         </div>
                     </div>
-                    <div className="flex gap-2">
-                        <button className="px-3 md:px-4 py-2 text-xs md:text-sm btn-organic-secondary inline-flex items-center gap-1">
-                            <Plus className="h-3.5 w-3.5" /> Add Field
-                        </button>
-                        <button className="px-3 md:px-4 py-2 text-xs md:text-sm btn-organic-secondary inline-flex items-center gap-1">
-                            <RefreshCw className="h-3.5 w-3.5" /> Re-analyze
-                        </button>
-                    </div>
+                    <button
+                        onClick={onBack}
+                        className="px-3 md:px-4 py-2 text-xs md:text-sm btn-organic-secondary inline-flex items-center gap-1"
+                    >
+                        <ArrowLeft className="h-3.5 w-3.5" /> Back
+                    </button>
                 </div>
             </header>
 
-            <div className="max-w-7xl mx-auto px-4 md:px-6 py-8 space-y-8">
+            <div id="dashboard-main" className="max-w-7xl mx-auto px-4 md:px-6 py-8 space-y-8">
+                <div className="flex items-center justify-between gap-3">
+                    <a href="#dashboard-steps" className="text-xs btn-organic-secondary px-3 py-1.5 inline-flex items-center gap-1">
+                        <ChevronDown className="h-3.5 w-3.5" /> Scroll Down
+                    </a>
+                    <button onClick={onEditReanalyze} className="text-xs btn-organic-secondary px-3 py-1.5">
+                        Edit Fields and Re-analyze
+                    </button>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-5 stagger-md">
                     <div className="glass-card card-lift p-6">
                         <div className="text-xs font-semibold tracking-[0.16em] uppercase text-muted mb-2">Baseline Carbon Estimate</div>
@@ -189,7 +196,7 @@ export default function DashboardView({ farm, fields, onFieldsChange }: Props) {
                     </div>
                 </div>
 
-                <div className="glass-card card-lift overflow-hidden">
+                <div id="dashboard-steps" className="glass-card card-lift overflow-hidden">
                     <div className="px-6 pt-6 pb-5 border-b border-[#E6E2DA]">
                         <div className="flex items-center justify-between gap-3">
                             <div className="text-sm text-muted">Net Zero Progress</div>

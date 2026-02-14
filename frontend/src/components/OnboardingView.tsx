@@ -16,6 +16,9 @@ import { analyzeField, buildStepsFromRoadmap, buildTimeline } from "@/lib/api";
 
 interface Props {
     onComplete: (farm: FarmConfig, dashFields: DashboardField[]) => void;
+    initialFarm?: FarmConfig | null;
+    initialFields?: DashboardField[];
+    initialStep?: number;
 }
 
 interface LngLatLike {
@@ -145,13 +148,19 @@ const makeSessionToken = (): string => {
     return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
-export default function OnboardingView({ onComplete }: Props) {
-    const [farm, setFarm] = useState<FarmConfig>({ farm_name: "", state: "", country: "" });
-    const [fields, setFields] = useState<FieldConfig[]>([emptyField(0)]);
+export default function OnboardingView({ onComplete, initialFarm, initialFields, initialStep = 0 }: Props) {
+    const [farm, setFarm] = useState<FarmConfig>(
+        initialFarm ? { ...initialFarm } : { farm_name: "", state: "", country: "" }
+    );
+    const [fields, setFields] = useState<FieldConfig[]>(
+        initialFields && initialFields.length > 0
+            ? initialFields.map((f) => ({ ...f.config }))
+            : [emptyField(0)]
+    );
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [analyzing, setAnalyzing] = useState(false);
     const [progress, setProgress] = useState<string[]>([]);
-    const [step, setStep] = useState(0);
+    const [step, setStep] = useState(initialStep);
 
     const [addressQuery, setAddressQuery] = useState("");
     const [addressSuggestions, setAddressSuggestions] = useState<MapboxFeatureLike[]>([]);
@@ -174,7 +183,13 @@ export default function OnboardingView({ onComplete }: Props) {
     const addField = () => {
         if (fields.length >= 4) return;
         const nextIndex = fields.length;
-        setFields([...fields, emptyField(nextIndex)]);
+        const seed = fields[0] || emptyField(0);
+        const nextField = {
+            ...emptyField(nextIndex),
+            latitude: seed.latitude,
+            longitude: seed.longitude,
+        };
+        setFields([...fields, nextField]);
         setActiveFieldTab(nextIndex);
     };
 
@@ -586,8 +601,8 @@ export default function OnboardingView({ onComplete }: Props) {
                 <div className="overflow-hidden pb-2">
                     <div className="flex transition-transform duration-300" style={{ transform: `translateX(-${step * 100}%)` }}>
                         <div className="w-full shrink-0 pb-2">
-                            <div className="grid grid-cols-1 md:grid-cols-2 items-start gap-6 stagger-md">
-                                <div className="glass-card card-lift p-6 order-1">
+                            <div className="grid grid-cols-1 md:grid-cols-2 items-stretch gap-6 stagger-md">
+                                <div className="glass-card card-lift p-6 order-1 h-full min-h-[560px] flex flex-col">
                                     <label className="block text-sm font-medium text-[#2D3A31]/80 mb-2">Search Farm Address</label>
                                     <div className="relative" ref={searchWrapRef}>
                                         <input
@@ -623,15 +638,15 @@ export default function OnboardingView({ onComplete }: Props) {
                                             </div>
                                         )}
                                     </div>
-                                    <div ref={mapContainerRef} className="mt-4 w-full h-[340px] rounded-2xl border border-[#E6E2DA] overflow-hidden image-drift" />
+                                    <div ref={mapContainerRef} className="mt-4 w-full flex-1 min-h-[420px] rounded-2xl border border-[#E6E2DA] overflow-hidden image-drift" />
                                     {mapsError && <p className="text-xs text-[#C27B66] mt-2">{mapsError}</p>}
                                 </div>
-                                <div className="glass-card card-lift p-7 order-2">
+                                <div className="glass-card card-lift p-7 order-2 h-full min-h-[560px] flex flex-col">
                                     <h2 className="text-lg font-semibold text-[#2D3A31] mb-4 flex items-center gap-2">
                                         <Wheat className="h-5 w-5 text-[#8C9A84]" />
                                         Farm Details
                                     </h2>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 flex-1">
                                         <div>
                                             <label className="block text-sm font-medium text-[#2D3A31]/80 mb-1">Farm Name <span className="text-red-400">*</span></label>
                                             <input className={inputCls("farm_name")} placeholder="Green Acres Ranch" value={farm.farm_name} onChange={(e) => { setFarm({ ...farm, farm_name: e.target.value }); setErrors({ ...errors, farm_name: "" }); }} />
