@@ -19,6 +19,92 @@ interface Props {
     onComplete: (farm: FarmConfig, dashFields: DashboardField[]) => void;
 }
 
+interface LngLatLike {
+    lng: number;
+    lat: number;
+}
+
+interface MapboxMapLike {
+    addControl: (control: unknown, position?: string) => void;
+    flyTo: (opts: { center: [number, number]; zoom: number; essential: boolean }) => void;
+    on: {
+        (event: "click", cb: (evt: { lngLat: LngLatLike }) => void): void;
+        (event: "load", cb: () => void): void;
+        (event: "error", cb: (evt: { error?: { message?: string } }) => void): void;
+        (event: "draw.create" | "draw.update" | "draw.delete", cb: () => void): void;
+    };
+    remove: () => void;
+}
+
+interface MapboxMarkerLike {
+    setLngLat: (coords: [number, number]) => MapboxMarkerLike;
+    addTo: (map: MapboxMapLike) => MapboxMarkerLike;
+    on: (event: "dragend", cb: () => void) => void;
+    getLngLat: () => LngLatLike;
+}
+
+interface MapboxGlLike {
+    accessToken: string;
+    Map: new (opts: { container: HTMLElement; style: string; center: [number, number]; zoom: number }) => MapboxMapLike;
+    Marker: new (opts: { draggable: boolean }) => MapboxMarkerLike;
+    NavigationControl: new () => unknown;
+    GeolocateControl: new (opts: {
+        positionOptions: { enableHighAccuracy: boolean };
+        trackUserLocation: boolean;
+        showUserHeading: boolean;
+    }) => unknown;
+}
+
+interface GeocoderContextLike {
+    id?: string;
+    text?: string;
+    short_code?: string;
+}
+
+interface MapboxFeatureLike {
+    id: string;
+    center?: [number, number];
+    text?: string;
+    place_name?: string;
+    context?: GeocoderContextLike[];
+}
+
+interface GeocodeResponse {
+    features?: MapboxFeatureLike[];
+}
+
+interface GeoJsonGeometryLike {
+    type: string;
+    coordinates?: unknown;
+}
+
+interface GeoJsonFeatureLike {
+    geometry?: GeoJsonGeometryLike;
+}
+
+interface GeoJsonFeatureCollectionLike {
+    features: GeoJsonFeatureLike[];
+}
+
+interface MapboxDrawLike {
+    getAll: () => GeoJsonFeatureCollectionLike;
+}
+
+interface MapboxDrawCtor {
+    new (opts: {
+        displayControlsDefault: boolean;
+        controls: {
+            polygon: boolean;
+            trash: boolean;
+        };
+    }): MapboxDrawLike;
+}
+
+interface TurfLike {
+    area: (feature: GeoJsonFeatureLike) => number;
+    centroid: (feature: GeoJsonFeatureLike) => { geometry?: { coordinates?: [number, number] } };
+}
+
 const CROP_OPTIONS = [
     { value: "maize", label: "Corn / Maize" },
     { value: "rice", label: "Rice" },
@@ -49,6 +135,13 @@ const emptyField = (index: number): FieldConfig => ({
     project: {},
 });
 
+const makeSessionToken = (): string => {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+        return crypto.randomUUID();
+    }
+    return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
+
 export default function OnboardingView({ onComplete }: Props) {
     const [farm, setFarm] = useState<FarmConfig>({ farm_name: "", state: "", country: "" });
     const [fields, setFields] = useState<FieldConfig[]>([emptyField(0)]);
@@ -56,9 +149,22 @@ export default function OnboardingView({ onComplete }: Props) {
     const [analyzing, setAnalyzing] = useState(false);
     const [progress, setProgress] = useState<string[]>([]);
     const [step, setStep] = useState(0);
+
     const [addressQuery, setAddressQuery] = useState("");
+    const [addressSuggestions, setAddressSuggestions] = useState<MapboxFeatureLike[]>([]);
+    const [showAddressSuggestions, setShowAddressSuggestions] = useState(false);
+    const [isSearchingAddress, setIsSearchingAddress] = useState(false);
     const [mapsError, setMapsError] = useState<string | null>(null);
-    const addressInputRef = useRef<HTMLInputElement | null>(null);
+    const [veteranStatus, setVeteranStatus] = useState("no");
+    const [farmTenure, setFarmTenure] = useState("owned");
+
+    const mapContainerRef = useRef<HTMLDivElement | null>(null);
+    const mapRef = useRef<MapboxMapLike | null>(null);
+    const markerRef = useRef<MapboxMarkerLike | null>(null);
+    const mapboxRef = useRef<MapboxGlLike | null>(null);
+    const drawRef = useRef<MapboxDrawLike | null>(null);
+    const searchWrapRef = useRef<HTMLDivElement | null>(null);
+    const sessionTokenRef = useRef<string>(makeSessionToken());
 
     const addField = () => {
         if (fields.length >= 4) return;
@@ -77,6 +183,77 @@ export default function OnboardingView({ onComplete }: Props) {
     const updateBaseline = useCallback((idx: number, patch: Partial<BaselineInputs>) => {
         setFields((prev) => prev.map((f, i) => (i === idx ? { ...f, baseline: { ...f.baseline, ...patch } } : f)));
     }, []);
+
+    const setPrimaryFieldCoords = useCallback((lng: number, lat: number) => {
+        setFields((prev) =>
+            prev.map((f, i) =>
+                i === 0
+                    ? {
+                        ...f,
+                        latitude: Number(lat.toFixed(6)),
+                        longitude: Number(lng.toFixed(6)),
+                    }
+                    : f
+            )
+        );
+    }, []);
+
+    const updatePrimaryFieldAreaFromSquareMeters = useCallback((areaM2: number) => {
+        setFields((prev) =>
+            prev.map((f, i) => {
+                if (i !== 0) return f;
+                const areaValue = f.area_unit === "acre" ? areaM2 / 4046.8564224 : areaM2 / 10000;
+                return {
+                    ...f,
+                    area_value: Number(areaValue.toFixed(2)),
+                };
+            })
+        );
+    }, []);
+
+    const setMarker = useCallback((lng: number, lat: number) => {
+        const map = mapRef.current;
+        const mapboxgl = mapboxRef.current;
+        if (!map || !mapboxgl) return;
+
+        if (!markerRef.current) {
+            markerRef.current = new mapboxgl.Marker({ draggable: true }).setLngLat([lng, lat]).addTo(map);
+            markerRef.current.on("dragend", () => {
+                const pos = markerRef.current?.getLngLat();
+                if (!pos) return;
+                setPrimaryFieldCoords(pos.lng, pos.lat);
+            });
+        } else {
+            markerRef.current.setLngLat([lng, lat]);
+        }
+    }, [setPrimaryFieldCoords]);
+
+    const applySelectedFeature = useCallback((feature: MapboxFeatureLike) => {
+        const [lng, lat] = feature.center || [];
+        if (typeof lng !== "number" || typeof lat !== "number") return;
+
+        let region = "";
+        let country = "";
+        for (const c of feature.context || []) {
+            if (typeof c.id === "string" && c.id.startsWith("region")) region = c.text || c.short_code || "";
+            if (typeof c.id === "string" && c.id.startsWith("country")) country = c.text || "";
+        }
+
+        const farmName = (feature.text || feature.place_name || "").split(",")[0];
+        const placeName = feature.place_name || feature.text || "";
+        setAddressQuery(placeName);
+        setFarm((prev) => ({
+            ...prev,
+            farm_name: farmName || prev.farm_name,
+            state: region || prev.state,
+            country: country || prev.country,
+        }));
+        setErrors((prev) => ({ ...prev, farm_name: "", state: "" }));
+
+        setMarker(lng, lat);
+        setPrimaryFieldCoords(lng, lat);
+        mapRef.current?.flyTo({ center: [lng, lat], zoom: 14, essential: true });
+    }, [setMarker, setPrimaryFieldCoords]);
 
     const validateFarmStep = (): boolean => {
         const e: Record<string, string> = {};
@@ -99,70 +276,217 @@ export default function OnboardingView({ onComplete }: Props) {
     };
 
     useEffect(() => {
+        const onDocumentClick = (event: MouseEvent) => {
+            const target = event.target as Node;
+            if (!searchWrapRef.current?.contains(target)) {
+                setShowAddressSuggestions(false);
+            }
+        };
+        document.addEventListener("mousedown", onDocumentClick);
+        return () => document.removeEventListener("mousedown", onDocumentClick);
+    }, []);
+
+    useEffect(() => {
         if (step !== 0) return;
-        const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-        if (!apiKey) {
-            setMapsError("Set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to enable address autocomplete.");
+
+        const accessToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
+        if (!accessToken) {
+            setMapsError("Set NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN to enable address autocomplete.");
+            return;
+        }
+        if (accessToken.startsWith("sk.")) {
+            setMapsError("Use a public Mapbox token (starts with pk.) for browser maps. Secret tokens (sk.) will show a gray map.");
             return;
         }
 
-        const initAutocomplete = () => {
-            const input = addressInputRef.current;
-            const googleAny = (window as Window & { google?: any }).google;
-            if (!input || !googleAny?.maps?.places) return;
-
-            const autocomplete = new googleAny.maps.places.Autocomplete(input, {
-                types: ["geocode"],
-                fields: ["name", "formatted_address", "address_components"],
-            });
-
-            autocomplete.addListener("place_changed", () => {
-                const place = autocomplete.getPlace();
-                if (!place) return;
-
-                let region = "";
-                let country = "";
-                for (const component of place.address_components || []) {
-                    const types = component.types || [];
-                    if (types.includes("administrative_area_level_1")) region = component.long_name || component.short_name;
-                    if (types.includes("country")) country = component.long_name;
-                }
-
-                const farmName = place.name || (place.formatted_address || "").split(",")[0];
-                setAddressQuery(place.formatted_address || place.name || "");
-                setFarm((prev) => ({
-                    ...prev,
-                    farm_name: farmName || prev.farm_name,
-                    state: region || prev.state,
-                    country: country || prev.country,
-                }));
-                setErrors((prev) => ({ ...prev, farm_name: "", state: "" }));
-            });
-
-            setMapsError(null);
+        const loadStylesheet = (id: string, href: string) => {
+            if (document.getElementById(id)) return;
+            const link = document.createElement("link");
+            link.id = id;
+            link.rel = "stylesheet";
+            link.href = href;
+            document.head.appendChild(link);
         };
 
-        const googleAny = (window as Window & { google?: any }).google;
-        if (googleAny?.maps?.places) {
-            initAutocomplete();
+        const loadScript = (selector: string, src: string) =>
+            new Promise<void>((resolve, reject) => {
+                const existing = document.querySelector(selector) as HTMLScriptElement | null;
+                if (existing) {
+                    if (existing.dataset.loaded === "true") {
+                        resolve();
+                        return;
+                    }
+                    existing.addEventListener("load", () => resolve(), { once: true });
+                    existing.addEventListener("error", () => reject(new Error("script load failed")), { once: true });
+                    return;
+                }
+
+                const script = document.createElement("script");
+                script.src = src;
+                script.async = true;
+                script.defer = true;
+                script.dataset.loaded = "false";
+                if (selector.includes("mapbox-gl=\"true\"")) script.dataset.mapboxGl = "true";
+                if (selector.includes("mapbox-gl-draw=\"true\"")) script.dataset.mapboxGlDraw = "true";
+                if (selector.includes("data-turf=\"true\"")) script.dataset.turf = "true";
+                script.onload = () => {
+                    script.dataset.loaded = "true";
+                    resolve();
+                };
+                script.onerror = () => reject(new Error("script load failed"));
+                document.head.appendChild(script);
+            });
+
+        let cancelled = false;
+
+        const init = async () => {
+            try {
+                loadStylesheet("mapbox-gl-css", "https://api.mapbox.com/mapbox-gl-js/v3.7.0/mapbox-gl.css");
+                loadStylesheet(
+                    "mapbox-gl-draw-css",
+                    "https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.5.0/mapbox-gl-draw.css"
+                );
+                await loadScript('script[data-mapbox-gl="true"]', "https://api.mapbox.com/mapbox-gl-js/v3.7.0/mapbox-gl.js");
+                await loadScript(
+                    'script[data-mapbox-gl-draw="true"]',
+                    "https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.5.0/mapbox-gl-draw.js"
+                );
+                await loadScript(
+                    'script[data-turf=\"true\"]',
+                    "https://cdn.jsdelivr.net/npm/@turf/turf@7.1.0/turf.min.js"
+                );
+            } catch {
+                setMapsError("Unable to load Mapbox scripts. Check your token and network.");
+                return;
+            }
+
+            if (cancelled || !mapContainerRef.current) return;
+
+            const mapboxgl = (window as Window & { mapboxgl?: MapboxGlLike }).mapboxgl;
+            const MapboxDraw = (window as Window & { MapboxDraw?: MapboxDrawCtor }).MapboxDraw;
+            const turf = (window as Window & { turf?: TurfLike }).turf;
+            if (!mapboxgl || !MapboxDraw || !turf) {
+                setMapsError("Mapbox did not initialize correctly.");
+                return;
+            }
+
+            mapboxgl.accessToken = accessToken;
+            mapboxRef.current = mapboxgl;
+
+            const map = new mapboxgl.Map({
+                container: mapContainerRef.current,
+                style: "mapbox://styles/mapbox/satellite-streets-v12",
+                center: [-95.7129, 37.0902],
+                zoom: 3,
+            });
+            mapRef.current = map;
+
+            const draw = new MapboxDraw({
+                displayControlsDefault: false,
+                controls: { polygon: true, trash: true },
+            });
+            drawRef.current = draw;
+            map.addControl(draw, "top-left");
+
+            const applyDrawnShapeToField = () => {
+                const all = draw.getAll();
+                const polygon = all.features.find((feature) => {
+                    const geometryType = feature.geometry?.type;
+                    return geometryType === "Polygon" || geometryType === "MultiPolygon";
+                });
+                if (!polygon) return;
+
+                const areaM2 = turf.area(polygon);
+                const centroid = turf.centroid(polygon);
+                const coords = centroid.geometry?.coordinates;
+                if (!coords || coords.length < 2) return;
+
+                const [lng, lat] = coords;
+                setMarker(lng, lat);
+                setPrimaryFieldCoords(lng, lat);
+                updatePrimaryFieldAreaFromSquareMeters(areaM2);
+            };
+
+            map.on("click", (evt: { lngLat: LngLatLike }) => {
+                const { lng, lat } = evt.lngLat;
+                setMarker(lng, lat);
+                setPrimaryFieldCoords(lng, lat);
+            });
+            map.on("draw.create", applyDrawnShapeToField);
+            map.on("draw.update", applyDrawnShapeToField);
+            map.on("draw.delete", () => {
+                drawRef.current = draw;
+            });
+
+            map.on("load", () => setMapsError(null));
+            map.on("error", (evt: { error?: { message?: string } }) => {
+                const message = evt.error?.message || "Map tiles failed to load. Check token scopes and URL restrictions.";
+                setMapsError(message);
+            });
+            map.addControl(new mapboxgl.NavigationControl(), "top-right");
+            map.addControl(
+                new mapboxgl.GeolocateControl({
+                    positionOptions: { enableHighAccuracy: true },
+                    trackUserLocation: false,
+                    showUserHeading: true,
+                }),
+                "top-right"
+            );
+        };
+
+        init();
+
+        return () => {
+            cancelled = true;
+            if (mapRef.current) {
+                mapRef.current.remove();
+                mapRef.current = null;
+            }
+            markerRef.current = null;
+            drawRef.current = null;
+            mapboxRef.current = null;
+        };
+    }, [setMarker, setPrimaryFieldCoords, step, updatePrimaryFieldAreaFromSquareMeters]);
+
+    useEffect(() => {
+        if (step !== 0) return;
+        const accessToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
+        const query = addressQuery.trim();
+
+        if (!accessToken || query.length < 3) {
+            setAddressSuggestions([]);
+            setIsSearchingAddress(false);
             return;
         }
 
-        const existing = document.querySelector('script[data-google-maps="places"]') as HTMLScriptElement | null;
-        if (existing) {
-            existing.addEventListener("load", initAutocomplete);
-            return () => existing.removeEventListener("load", initAutocomplete);
-        }
+        const controller = new AbortController();
+        const timeout = window.setTimeout(async () => {
+            setIsSearchingAddress(true);
+            try {
+                const endpoint = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json`;
+                const params = new URLSearchParams({
+                    access_token: accessToken,
+                    autocomplete: "true",
+                    limit: "5",
+                    types: "address,place,locality,postcode",
+                    session_token: sessionTokenRef.current,
+                });
+                const response = await fetch(`${endpoint}?${params.toString()}`, { signal: controller.signal });
+                if (!response.ok) throw new Error("mapbox geocoding failed");
+                const data = (await response.json()) as GeocodeResponse;
+                setAddressSuggestions(data.features || []);
+            } catch {
+                if (!controller.signal.aborted) setAddressSuggestions([]);
+            } finally {
+                if (!controller.signal.aborted) setIsSearchingAddress(false);
+            }
+        }, 250);
 
-        const script = document.createElement("script");
-        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
-        script.async = true;
-        script.defer = true;
-        script.dataset.googleMaps = "places";
-        script.onload = initAutocomplete;
-        script.onerror = () => setMapsError("Unable to load Google Maps. Check your API key and Places API settings.");
-        document.head.appendChild(script);
-    }, [step]);
+        return () => {
+            controller.abort();
+            window.clearTimeout(timeout);
+        };
+    }, [addressQuery, step]);
 
     const handleAnalyze = async () => {
         if (!validateAll()) return;
@@ -203,52 +527,120 @@ export default function OnboardingView({ onComplete }: Props) {
     return (
         <div className="min-h-screen">
             <div className="max-w-4xl mx-auto px-4 py-10 pb-16">
-                <div className="mb-8">
-                    <h1 className="text-2xl font-bold text-white">Set up your Farm</h1>
-                    <p className="text-white/70 text-sm mt-1">Add your farm details and up to 4 fields for baseline analysis.</p>
-                </div>
-
                 <div className="overflow-hidden pb-2">
                     <div className="flex transition-transform duration-300" style={{ transform: `translateX(-${step * 100}%)` }}>
                         <div className="w-full shrink-0 pb-2">
-                            <div className="glass-card p-6">
-                                <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                                    <Wheat className="h-5 w-5 text-emerald-300" />
-                                    Farm Details
-                                </h2>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-white/80 mb-1">Farm Name <span className="text-red-400">*</span></label>
-                                        <input className={inputCls("farm_name")} placeholder="Green Acres Ranch" value={farm.farm_name} onChange={(e) => { setFarm({ ...farm, farm_name: e.target.value }); setErrors({ ...errors, farm_name: "" }); }} />
-                                        {errors.farm_name && <p className="text-xs text-red-300 mt-1">{errors.farm_name}</p>}
+                            <div className="grid grid-cols-1 md:grid-cols-2 items-start gap-4 max-h-[74vh] overflow-y-auto pr-1">
+                                <div className="glass-card p-4 order-1">
+                                    <label className="block text-sm font-medium text-white/80 mb-2">Search Farm Address</label>
+                                    <div className="relative" ref={searchWrapRef}>
+                                        <input
+                                            className={`${inputCls("")} w-full`}
+                                            placeholder="Start typing an address..."
+                                            value={addressQuery}
+                                            onChange={(e) => {
+                                                setAddressQuery(e.target.value);
+                                                setShowAddressSuggestions(true);
+                                            }}
+                                            onFocus={() => setShowAddressSuggestions(true)}
+                                        />
+                                        {showAddressSuggestions && (addressSuggestions.length > 0 || isSearchingAddress) && (
+                                            <div className="absolute z-20 mt-2 w-full rounded-xl border border-white/15 bg-slate-950/95 backdrop-blur-md overflow-hidden shadow-xl">
+                                                {isSearchingAddress && (
+                                                    <div className="px-3 py-2 text-xs text-white/60">Searching...</div>
+                                                )}
+                                                {!isSearchingAddress && addressSuggestions.map((feature) => (
+                                                    <button
+                                                        key={feature.id}
+                                                        type="button"
+                                                        className="w-full text-left px-3 py-2 text-sm text-white/85 hover:bg-white/10"
+                                                        onClick={() => {
+                                                            applySelectedFeature(feature);
+                                                            setShowAddressSuggestions(false);
+                                                            setAddressSuggestions([]);
+                                                            sessionTokenRef.current = makeSessionToken();
+                                                        }}
+                                                    >
+                                                        {feature.place_name || feature.text}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-white/80 mb-1">State / Region <span className="text-red-400">*</span></label>
-                                        <input className={inputCls("state")} placeholder="Iowa" value={farm.state} onChange={(e) => { setFarm({ ...farm, state: e.target.value }); setErrors({ ...errors, state: "" }); }} />
-                                        {errors.state && <p className="text-xs text-red-300 mt-1">{errors.state}</p>}
-                                    </div>
-                                    <div className="sm:col-span-2">
-                                        <label className="block text-sm font-medium text-white/80 mb-1">Country</label>
-                                        <input className={inputCls("country")} placeholder="United States" value={farm.country} onChange={(e) => setFarm({ ...farm, country: e.target.value })} />
+                                    <div ref={mapContainerRef} className="mt-3 w-full h-[260px] rounded-2xl border border-white/15 overflow-hidden" />
+                                    <p className="text-xs text-white/55 mt-2">
+                                        Start typing to autocomplete, then select an address to place it on the map. Use the polygon tool on the map to draw your farm boundary and auto-fill area.
+                                    </p>
+                                    {mapsError && <p className="text-xs text-amber-300 mt-2">{mapsError}</p>}
+                                </div>
+                                <div className="glass-card p-6 order-2">
+                                    <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                                        <Wheat className="h-5 w-5 text-emerald-300" />
+                                        Farm Details
+                                    </h2>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-white/80 mb-1">Farm Name <span className="text-red-400">*</span></label>
+                                            <input className={inputCls("farm_name")} placeholder="Green Acres Ranch" value={farm.farm_name} onChange={(e) => { setFarm({ ...farm, farm_name: e.target.value }); setErrors({ ...errors, farm_name: "" }); }} />
+                                            {errors.farm_name && <p className="text-xs text-red-300 mt-1">{errors.farm_name}</p>}
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-white/80 mb-1">State / Region <span className="text-red-400">*</span></label>
+                                            <input className={inputCls("state")} placeholder="Iowa" value={farm.state} onChange={(e) => { setFarm({ ...farm, state: e.target.value }); setErrors({ ...errors, state: "" }); }} />
+                                            {errors.state && <p className="text-xs text-red-300 mt-1">{errors.state}</p>}
+                                        </div>
+                                        <div className="sm:col-span-2">
+                                            <label className="block text-sm font-medium text-white/80 mb-1">Country</label>
+                                            <input className={inputCls("country")} placeholder="United States" value={farm.country} onChange={(e) => setFarm({ ...farm, country: e.target.value })} />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-white/80 mb-1">
+                                                <span className="inline-flex items-center gap-1">
+                                                    Veteran Status
+                                                    <span className="relative group inline-flex">
+                                                        <HelpCircle className="h-3.5 w-3.5 text-white/60" />
+                                                        <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 w-52 -translate-x-1/2 rounded-md border border-white/15 bg-slate-950/95 px-2 py-1 text-[11px] text-white/85 opacity-0 transition-opacity group-hover:opacity-100">
+                                                            Better credit access for those who served.
+                                                        </span>
+                                                    </span>
+                                                </span>
+                                            </label>
+                                            <select
+                                                className={`${inputCls("")} appearance-none`}
+                                                value={veteranStatus}
+                                                onChange={(e) => setVeteranStatus(e.target.value)}
+                                            >
+                                                <option value="yes" className="bg-slate-900">Yes</option>
+                                                <option value="no" className="bg-slate-900">No</option>
+                                                <option value="prefer_not" className="bg-slate-900">Prefer not to say</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-white/80 mb-1">
+                                                <span className="inline-flex items-center gap-1">
+                                                    Farm Tenure
+                                                    <span className="relative group inline-flex">
+                                                        <HelpCircle className="h-3.5 w-3.5 text-white/60" />
+                                                        <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 w-56 -translate-x-1/2 rounded-md border border-white/15 bg-slate-950/95 px-2 py-1 text-[11px] text-white/85 opacity-0 transition-opacity group-hover:opacity-100">
+                                                            So that your carbon credits stay with you wherever you farm.
+                                                        </span>
+                                                    </span>
+                                                </span>
+                                            </label>
+                                            <select
+                                                className={`${inputCls("")} appearance-none`}
+                                                value={farmTenure}
+                                                onChange={(e) => setFarmTenure(e.target.value)}
+                                            >
+                                                <option value="owned" className="bg-slate-900">Owned</option>
+                                                <option value="leased" className="bg-slate-900">Leased</option>
+                                            </select>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                            <div className="glass-card p-4 mt-4">
-                                <label className="block text-sm font-medium text-white/80 mb-2">Search Farm Address</label>
-                                <input
-                                    ref={addressInputRef}
-                                    className={`${inputCls("")} w-full`}
-                                    placeholder="Start typing an address..."
-                                    value={addressQuery}
-                                    onChange={(e) => setAddressQuery(e.target.value)}
-                                />
-                                <p className="text-xs text-white/55 mt-2">
-                                    Selecting an address auto-fills Farm Name, State/Region, and Country.
-                                </p>
-                                {mapsError && <p className="text-xs text-amber-300 mt-2">{mapsError}</p>}
-                            </div>
                             <div className="mt-6">
-                                <button onClick={() => validateFarmStep() && setStep(1)} className="w-full py-4 btn-glass-primary font-bold text-base flex items-center justify-center gap-2">
+                                <button onClick={() => validateFarmStep() && setStep(1)} className="w-full py-3 btn-glass-primary font-semibold text-sm flex items-center justify-center gap-2">
                                     Next <ArrowRight className="h-5 w-5" />
                                 </button>
                             </div>
@@ -360,4 +752,3 @@ export default function OnboardingView({ onComplete }: Props) {
         </div>
     );
 }
-
