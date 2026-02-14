@@ -13,7 +13,6 @@ import {
     BarChart3,
     Plus,
     RefreshCw,
-
 } from "lucide-react";
 import {
     AreaChart,
@@ -38,14 +37,12 @@ export default function DashboardView({ farm, fields, onFieldsChange }: Props) {
 
     const activeField = fields[activeTab];
 
-    // Totals across all fields
     const totalBaseline = fields.reduce(
         (sum, f) => sum + (f.analysis?.audit.baseline_tco2e_y ?? 0),
         0
     );
     const totalCredits = fields.reduce((sum, f) => sum + f.creditBalance, 0);
 
-    // Latest timestamp
     const lastComputed = new Date().toLocaleString("en-US", {
         month: "short",
         day: "numeric",
@@ -66,7 +63,6 @@ export default function DashboardView({ farm, fields, onFieldsChange }: Props) {
             newSteps[stepIdx] = { ...newSteps[stepIdx], completed: !wasCompleted };
             field.steps = newSteps;
 
-            // Optimistic credit update
             if (!wasCompleted) {
                 field.creditBalance = Math.round(field.creditBalance * 1.08);
                 field.timeline = [
@@ -85,9 +81,8 @@ export default function DashboardView({ farm, fields, onFieldsChange }: Props) {
             onFieldsChange(updated);
 
             if (!wasCompleted) {
-                // Show undo toast
                 if (toastTimeout) clearTimeout(toastTimeout);
-                setToast({ msg: "Step completed — projected credits updated", undoIdx: fieldIdx, stepId });
+                setToast({ msg: "Step completed - projected credits updated", undoIdx: fieldIdx, stepId });
                 const t = setTimeout(() => setToast(null), 5000);
                 setToastTimeout(t);
             }
@@ -105,34 +100,36 @@ export default function DashboardView({ farm, fields, onFieldsChange }: Props) {
     if (fields.length === 0) {
         return (
             <div className="min-h-screen flex items-center justify-center">
-                <div className="text-center space-y-4">
-                    <Leaf className="h-12 w-12 text-slate-300 mx-auto" />
-                    <h2 className="text-xl font-semibold text-slate-600">No fields yet</h2>
-                    <p className="text-sm text-slate-400">Add your first field to see your dashboard</p>
+                <div className="glass-card text-center space-y-4 p-8">
+                    <Leaf className="h-12 w-12 text-white/40 mx-auto" />
+                    <h2 className="text-xl font-semibold text-white/90">No fields yet</h2>
+                    <p className="text-sm text-white/60">Add your first field to see your dashboard</p>
                 </div>
             </div>
         );
     }
 
+    const completedSteps = activeField.steps.filter((s) => s.completed).length;
+    const completionPct = activeField.steps.length > 0 ? (completedSteps / activeField.steps.length) * 100 : 0;
+
     return (
-        <div className="min-h-screen bg-slate-50">
-            {/* Top Nav */}
-            <header className="bg-white border-b border-slate-100 sticky top-0 z-30">
+        <div className="min-h-screen">
+            <header className="glass-card sticky top-0 z-30 rounded-none border-x-0 border-t-0">
                 <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-lg bg-emerald-600 flex items-center justify-center">
-                            <Leaf className="h-4 w-4 text-white" />
+                        <div className="h-8 w-8 rounded-lg glass-secondary border border-emerald-400/50 flex items-center justify-center">
+                            <Leaf className="h-4 w-4 text-emerald-300" />
                         </div>
                         <div>
-                            <h1 className="font-bold text-slate-900 text-sm">{farm.farm_name}</h1>
-                            <p className="text-xs text-slate-400">{farm.state}{farm.country ? `, ${farm.country}` : ""}</p>
+                            <h1 className="font-bold text-white text-sm">{farm.farm_name}</h1>
+                            <p className="text-xs text-white/60">{farm.state}{farm.country ? `, ${farm.country}` : ""}</p>
                         </div>
                     </div>
                     <div className="flex gap-2">
-                        <button className="text-xs text-slate-500 hover:text-emerald-600 flex items-center gap-1 transition-colors px-3 py-2 rounded-lg hover:bg-slate-50">
+                        <button className="text-xs text-white/70 hover:text-emerald-300 flex items-center gap-1 transition-colors px-3 py-2 rounded-full glass-secondary">
                             <Plus className="h-3 w-3" /> Add Field
                         </button>
-                        <button className="text-xs text-slate-500 hover:text-emerald-600 flex items-center gap-1 transition-colors px-3 py-2 rounded-lg hover:bg-slate-50">
+                        <button className="text-xs text-white/70 hover:text-cyan-300 flex items-center gap-1 transition-colors px-3 py-2 rounded-full glass-secondary">
                             <RefreshCw className="h-3 w-3" /> Re-analyze
                         </button>
                     </div>
@@ -140,65 +137,91 @@ export default function DashboardView({ farm, fields, onFieldsChange }: Props) {
             </header>
 
             <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
-                {/* ── Summary Band ───────────────────────── */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {/* Baseline */}
-                    <div className="bg-white rounded-2xl border border-slate-100 p-5">
-                        <div className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Baseline Carbon Estimate</div>
-                        <div className="text-3xl font-bold text-slate-900">
+                    <div className="glass-card p-5">
+                        <div className="text-xs font-medium text-white/60 uppercase mb-1">Baseline Carbon Estimate</div>
+                        <div className="text-3xl font-bold text-white financial-number">
                             {totalBaseline.toFixed(1)}{" "}
-                            <span className="text-base font-normal text-slate-400">tCO₂e/yr</span>
+                            <span className="text-base font-normal text-white/50">tCO2e/yr</span>
                         </div>
-                        <div className="mt-2 inline-flex items-center text-xs text-slate-400 bg-slate-50 px-2 py-1 rounded-md">
+                        <div className="mt-2 inline-flex items-center text-xs text-white/60 glass-secondary px-2 py-1 rounded-md">
                             <Calendar className="h-3 w-3 mr-1" />
                             Last computed: {lastComputed}
                         </div>
                     </div>
 
-                    {/* Credit Balance */}
-                    <div className="bg-emerald-600 rounded-2xl p-5 text-white">
-                        <div className="text-xs font-medium text-emerald-200 uppercase tracking-wide mb-1">Est. Carbon Credit Balance</div>
-                        <div className="flex items-end gap-2">
-                            <span className="text-3xl font-bold">${totalCredits.toLocaleString()}</span>
-                            <TrendingUp className="h-5 w-5 text-emerald-200 mb-1" />
+                    <div className="glass-card p-5 relative overflow-hidden">
+                        <div className="absolute inset-0 opacity-60" style={{ background: "var(--gradient-eco)" }} />
+                        <div className="relative">
+                            <div className="text-xs font-medium text-emerald-200 uppercase mb-1">Est. Carbon Credit Balance</div>
+                            <div className="flex items-end gap-2">
+                                <span className="text-3xl font-bold text-emerald-100 financial-number">${totalCredits.toLocaleString()}</span>
+                                <TrendingUp className="h-5 w-5 text-emerald-200 mb-1" />
+                            </div>
+                            <div className="text-xs text-emerald-200 mt-1">Annual projected value</div>
                         </div>
-                        <div className="text-xs text-emerald-200 mt-1">Annual projected value</div>
                     </div>
 
-                    {/* Timeline Chart */}
-                    <div className="bg-white rounded-2xl border border-slate-100 p-4">
-                        <div className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1">
+                    <div className="glass-card p-4">
+                        <div className="text-xs font-medium text-white/60 uppercase mb-2 flex items-center gap-1">
                             <BarChart3 className="h-3 w-3" /> Credit Balance Timeline
                         </div>
                         <div className="h-20">
                             <ResponsiveContainer width="100%" height="100%">
                                 <AreaChart data={activeField?.timeline || []}>
                                     <defs>
-                                        <linearGradient id="emeraldGrad" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                                            <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                                        <linearGradient id="ecoGrad" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#22c55e" stopOpacity={0.35} />
+                                            <stop offset="65%" stopColor="#06b6d4" stopOpacity={0.2} />
+                                            <stop offset="95%" stopColor="#06b6d4" stopOpacity={0} />
                                         </linearGradient>
                                     </defs>
-                                    <XAxis dataKey="date" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-                                    <Tooltip contentStyle={{ borderRadius: "8px", fontSize: "12px" }} />
-                                    <Area type="monotone" dataKey="value" stroke="#10b981" fill="url(#emeraldGrad)" strokeWidth={2} />
+                                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: "rgba(255,255,255,0.6)" }} axisLine={false} tickLine={false} />
+                                    <Tooltip contentStyle={{ borderRadius: "8px", fontSize: "12px", background: "rgba(23,23,23,0.92)", border: "1px solid rgba(255,255,255,0.2)", color: "#fff" }} />
+                                    <Area type="monotone" dataKey="value" stroke="#4ade80" fill="url(#ecoGrad)" strokeWidth={2} />
                                 </AreaChart>
                             </ResponsiveContainer>
                         </div>
                     </div>
                 </div>
 
-                {/* ── Field Tabs ─────────────────────────── */}
-                <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
-                    {/* Tab Bar */}
-                    <div className="flex border-b border-slate-100 overflow-x-auto">
+                <div className="glass-card overflow-hidden">
+                    <div className="px-6 pt-5 pb-4 border-b border-white/10">
+                        <div className="flex items-center justify-between gap-3">
+                            <div className="text-sm text-white/70">Net Zero Progress</div>
+                            <div className="text-xs text-emerald-200">
+                                {completedSteps}/{activeField.steps.length} actions complete
+                            </div>
+                        </div>
+                        <div className="mt-2 h-2.5 rounded-full bg-white/10 overflow-hidden">
+                            <div
+                                className="h-full rounded-full"
+                                style={{
+                                    width: `${completionPct}%`,
+                                    background: "linear-gradient(90deg, #22c55e 0%, #06b6d4 100%)",
+                                    boxShadow: "0 0 16px rgba(34,197,94,0.45)",
+                                    transition: "width 300ms cubic-bezier(0.34, 1.56, 0.64, 1)",
+                                }}
+                            />
+                        </div>
+                        <div className="mt-3 flex gap-2">
+                            <span className="px-3 py-1 text-[11px] rounded-full border border-emerald-300/60 text-emerald-200 shadow-[0_0_16px_rgba(34,197,94,0.3)]">
+                                EQIP Active
+                            </span>
+                            <span className="px-3 py-1 text-[11px] rounded-full border border-cyan-300/60 text-cyan-200 shadow-[0_0_16px_rgba(6,182,212,0.3)]">
+                                CSP Active
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className="flex border-b border-white/10 overflow-x-auto">
                         {fields.map((f, i) => (
                             <button
                                 key={i}
                                 onClick={() => setActiveTab(i)}
                                 className={`px-5 py-3 text-sm font-medium whitespace-nowrap transition-colors border-b-2 ${i === activeTab
-                                    ? "border-emerald-600 text-emerald-700 bg-emerald-50/50"
-                                    : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50"
+                                    ? "border-emerald-400 text-emerald-200 bg-emerald-500/10"
+                                    : "border-transparent text-white/60 hover:text-white hover:bg-white/5"
                                     }`}
                             >
                                 {f.fieldName}
@@ -206,81 +229,75 @@ export default function DashboardView({ farm, fields, onFieldsChange }: Props) {
                         ))}
                     </div>
 
-                    {/* Active Field Content */}
                     {activeField && (
                         <div className="p-6">
-                            {/* Field Metrics */}
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-                                <MetricPill label="Baseline" value={`${activeField.analysis?.audit.baseline_tco2e_y.toFixed(1)} tCO₂e`} />
-                                <MetricPill label="Savings" value={`${activeField.analysis?.reduction_summary.annual_tco2e_saved[0].toFixed(1)}–${activeField.analysis?.reduction_summary.annual_tco2e_saved[1].toFixed(1)} tCO₂e`} />
+                                <MetricPill label="Baseline" value={`${activeField.analysis?.audit.baseline_tco2e_y.toFixed(1)} tCO2e`} />
+                                <MetricPill label="Savings" value={`${activeField.analysis?.reduction_summary.annual_tco2e_saved[0].toFixed(1)}-${activeField.analysis?.reduction_summary.annual_tco2e_saved[1].toFixed(1)} tCO2e`} />
                                 <MetricPill label="NDVI" value={`${activeField.analysis?.satellite.ndvi_mean.toFixed(2)}`} />
                                 <MetricPill label="Confidence" value={`${((activeField.analysis?.satellite.cropland_confidence ?? 0) * 100).toFixed(0)}%`} />
                             </div>
 
-                            {/* Steps */}
-                            <h3 className="text-base font-semibold text-slate-800 mb-4 flex items-center gap-2">
-                                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                            <h3 className="text-base font-semibold text-white mb-4 flex items-center gap-2">
+                                <CheckCircle2 className="h-5 w-5 text-emerald-300" />
                                 Steps to Reduce Emissions
                             </h3>
                             <div className="space-y-2">
                                 {activeField.steps.map((step) => (
-                                    <div key={step.id} className="border border-slate-100 rounded-xl overflow-hidden">
-                                        {/* Step Header */}
-                                        <div className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors">
+                                    <div key={step.id} className="border border-white/10 rounded-xl overflow-hidden bg-black/15">
+                                        <div className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors">
                                             <button
                                                 onClick={() => toggleStep(activeTab, step.id)}
                                                 className="flex-shrink-0"
                                             >
                                                 {step.completed ? (
-                                                    <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                                                    <CheckCircle2 className="h-5 w-5 text-emerald-300" />
                                                 ) : (
-                                                    <Circle className="h-5 w-5 text-slate-300 hover:text-emerald-400 transition-colors" />
+                                                    <Circle className="h-5 w-5 text-white/35 hover:text-emerald-300 transition-colors" />
                                                 )}
                                             </button>
                                             <button
                                                 className="flex-1 text-left"
                                                 onClick={() => setExpandedStep(expandedStep === step.id ? null : step.id)}
                                             >
-                                                <span className={`text-sm font-medium ${step.completed ? "line-through text-slate-400" : "text-slate-800"}`}>
+                                                <span className={`text-sm font-medium ${step.completed ? "line-through text-white/40" : "text-white/90"}`}>
                                                     {step.title}
                                                 </span>
                                             </button>
                                             <button onClick={() => setExpandedStep(expandedStep === step.id ? null : step.id)}>
                                                 {expandedStep === step.id ? (
-                                                    <ChevronUp className="h-4 w-4 text-slate-400" />
+                                                    <ChevronUp className="h-4 w-4 text-white/45" />
                                                 ) : (
-                                                    <ChevronDown className="h-4 w-4 text-slate-400" />
+                                                    <ChevronDown className="h-4 w-4 text-white/45" />
                                                 )}
                                             </button>
                                         </div>
 
-                                        {/* Expanded Detail */}
                                         {expandedStep === step.id && (
-                                            <div className="px-4 pb-4 pt-0 ml-8 text-sm space-y-3 border-t border-slate-50">
-                                                <p className="text-slate-600 pt-3">{step.description}</p>
+                                            <div className="px-4 pb-4 pt-0 ml-8 text-sm space-y-3 border-t border-white/10">
+                                                <p className="text-white/70 pt-3">{step.description}</p>
                                                 <div>
-                                                    <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">Tips / Actions</span>
+                                                    <span className="text-xs font-medium text-white/55 uppercase">Tips / Actions</span>
                                                     <ul className="mt-1 space-y-1">
                                                         {step.tips.map((t, i) => (
-                                                            <li key={i} className="flex items-start gap-2 text-slate-600">
-                                                                <span className="text-emerald-500 mt-0.5">•</span> {t}
+                                                            <li key={i} className="flex items-start gap-2 text-white/70">
+                                                                <span className="text-emerald-300 mt-0.5">•</span> {t}
                                                             </li>
                                                         ))}
                                                     </ul>
                                                 </div>
                                                 <div className="flex items-center gap-2">
-                                                    <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">Expected Impact:</span>
-                                                    <span className="text-xs text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full font-medium">{step.expectedImpact}</span>
+                                                    <span className="text-xs font-medium text-white/55 uppercase">Expected Impact:</span>
+                                                    <span className="text-xs text-emerald-200 bg-emerald-500/20 px-2 py-0.5 rounded-full font-medium border border-emerald-400/35">{step.expectedImpact}</span>
                                                 </div>
-                                                <div className="text-xs text-slate-400 italic">Evidence upload (coming soon)</div>
+                                                <div className="text-xs text-white/45 italic">Evidence upload (coming soon)</div>
                                             </div>
                                         )}
                                     </div>
                                 ))}
                             </div>
 
-                            {/* Completed count */}
-                            <div className="mt-4 text-xs text-slate-400">
+                            <div className="mt-4 text-xs text-white/50">
                                 {activeField.steps.filter((s) => s.completed).length} of {activeField.steps.length} steps completed
                             </div>
                         </div>
@@ -288,10 +305,9 @@ export default function DashboardView({ farm, fields, onFieldsChange }: Props) {
                 </div>
             </div>
 
-            {/* ── Toast ────────────────────────────────── */}
             {toast && (
-                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-slate-800 text-white px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 text-sm animate-slide-up">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-400 flex-shrink-0" />
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 glass-card text-white px-5 py-3 rounded-xl flex items-center gap-3 text-sm animate-slide-up">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-300 flex-shrink-0" />
                     <span>{toast.msg}</span>
                     <button
                         onClick={handleUndo}
@@ -317,9 +333,9 @@ export default function DashboardView({ farm, fields, onFieldsChange }: Props) {
 
 function MetricPill({ label, value }: { label: string; value: string }) {
     return (
-        <div className="bg-slate-50 rounded-xl px-3 py-2.5">
-            <div className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">{label}</div>
-            <div className="text-sm font-semibold text-slate-800 mt-0.5">{value}</div>
+        <div className="glass-secondary rounded-xl px-3 py-2.5">
+            <div className="text-[10px] font-medium text-white/55 uppercase">{label}</div>
+            <div className="text-sm font-semibold text-white mt-0.5 financial-number">{value}</div>
         </div>
     );
 }

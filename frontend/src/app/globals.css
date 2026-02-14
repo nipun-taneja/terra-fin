@@ -5,20 +5,108 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
+  --primary: #22c55e;
+  --primary-glow: rgba(34, 197, 94, 0.5);
+  --accent: #06b6d4;
+  --surface-glass: rgba(23, 23, 23, 0.75);
+  --surface-glass-light: rgba(255, 255, 255, 0.1);
+  --border-glass: rgba(255, 255, 255, 0.15);
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.7);
+  --text-tertiary: rgba(255, 255, 255, 0.4);
+  --success: #4ade80;
+  --warning: #fbbf24;
+  --error: #f87171;
+  --border-highlight: 1px solid rgba(255, 255, 255, 0.1);
+  --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.36);
+  --gradient-eco: linear-gradient(135deg, rgba(34, 197, 94, 0.2) 0%, rgba(0, 0, 0, 0) 100%);
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  color: var(--text-primary);
+  font-family: 'Satoshi', 'Inter', system-ui, -apple-system, sans-serif;
+  letter-spacing: 0.02em;
+  background:
+    radial-gradient(circle at 14% 18%, rgba(34, 197, 94, 0.15), transparent 36%),
+    radial-gradient(circle at 84% 12%, rgba(6, 182, 212, 0.15), transparent 34%),
+    radial-gradient(circle at 52% 72%, rgba(34, 197, 94, 0.1), transparent 40%),
+    linear-gradient(120deg, #0f172a 0%, #020617 58%, #0b1120 100%);
+  background-attachment: fixed;
+  min-height: 100vh;
 }
 
 @layer utilities {
-  .glass {
-    @apply bg-white/80 backdrop-blur-xl border border-white/30 shadow-lg;
+  .glass-card {
+    background: var(--surface-glass);
+    border: var(--border-highlight);
+    box-shadow: var(--shadow-glass);
+    border-radius: 24px;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
   }
+
+  .glass-secondary {
+    background: var(--surface-glass-light);
+    border: 1px solid var(--border-glass);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+
+  .glass-input {
+    height: 48px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    color: var(--text-primary);
+  }
+
+  .glass-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.2);
+    outline: none;
+  }
+
+  .btn-glass-primary {
+    background: rgba(34, 197, 94, 0.2);
+    border: 1px solid rgba(34, 197, 94, 0.5);
+    color: #4ade80;
+    border-radius: 9999px;
+    backdrop-filter: blur(4px);
+    box-shadow: 0 0 15px rgba(34, 197, 94, 0.2);
+    transition: transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1), background 0.3s ease, box-shadow 0.3s ease;
+  }
+
+  .btn-glass-primary:hover {
+    background: rgba(34, 197, 94, 0.4);
+    box-shadow: 0 0 25px rgba(34, 197, 94, 0.4);
+    transform: translateY(-1px);
+  }
+
+  .map-shell {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .map-shell::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background:
+      linear-gradient(115deg, rgba(2, 8, 23, 0.2), rgba(2, 8, 23, 0.7)),
+      repeating-linear-gradient(40deg, rgba(148, 163, 184, 0.04) 0 2px, transparent 2px 12px),
+      radial-gradient(circle at 60% 65%, rgba(34, 197, 94, 0.18), transparent 38%);
+    pointer-events: none;
+    z-index: -1;
+  }
+}
+
+.financial-number {
+  font-family: 'Geist Mono', 'SFMono-Regular', Menlo, monospace;
+  font-weight: 500;
+}
+
+.text-body {
+  font-weight: 300;
 }
 
 /* Skeleton shimmer */
