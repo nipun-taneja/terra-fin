@@ -1,6 +1,9 @@
 // ─── Identity / CRS ───────────────────────────────────────────
 export interface CRSRequest {
     farmer_name: string;
+    first_name?: string;
+    last_name?: string;
+    address?: string;
     phone?: string;
     email?: string;
     country?: string;
@@ -11,6 +14,8 @@ export interface CRSResponse {
     credible: boolean;
     score: number;
     flags: string[];
+    request_id?: string;
+    report?: Record<string, unknown>;
 }
 
 // ─── Farmer registration form ────────────────────────────────
