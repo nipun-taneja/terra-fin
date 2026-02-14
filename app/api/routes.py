@@ -1,5 +1,6 @@
-from __future__ import annotations
-
+"""
+Main analysis router orchestrating satellite, baseline, and AI generation.
+"""
 from fastapi import APIRouter, HTTPException
 
 from app.models.schemas import AnalyzeRequest, AnalyzeResponse, SatelliteSummary, RoadmapStep

@@ -1,5 +1,6 @@
-from __future__ import annotations
-
+"""
+Loader for Engineer-1 analysis JSON files.
+"""
 import json
 from pathlib import Path
 from typing import Any, Dict

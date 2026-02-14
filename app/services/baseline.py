@@ -1,5 +1,6 @@
-from __future__ import annotations
-
+"""
+Baseline emissions estimations for maize crops.
+"""
 from typing import Literal, Optional
 
 

@@ -1,5 +1,6 @@
-from __future__ import annotations
-
+"""
+Pydantic schemas for request and response validation.
+"""
 from typing import Any, Dict, List, Literal, Tuple
 from pydantic import BaseModel, Field
 from typing import Optional

@@ -1,5 +1,6 @@
-from __future__ import annotations
-
+"""
+Financial modeling for carbon credits and loan offers.
+"""
 from typing import Tuple
 
 
