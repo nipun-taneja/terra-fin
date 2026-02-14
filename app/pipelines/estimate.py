@@ -76,7 +76,39 @@ def _data_quality_score(season_events: List[Dict[str, str]]) -> float:
 
 
 # -----------------------------
-# Placeholder delta estimator
+# Rice methane model (MVP)
+# -----------------------------
+def _rice_methane_delta_tco2e(
+    area_ha: float,
+    baseline_irrig_events: int,
+    project_irrig_events: int,
+) -> Tuple[float, str]:
+    """
+    MVP methane model:
+      - baseline methane intensity proxy: 3.2 tCO2e / ha / season (continuous flooding-ish)
+      - AWD proxy: if project_irrig_events <= baseline_irrig_events => assume AWD-ish
+      - reduction factor: 0.40 (AWD proxy) else 0.10 (minor water management)
+
+    Returns: (delta_mid, assumptions_str)
+    """
+    area_ha = max(float(area_ha or 0.0), 0.0)
+    baseline_intensity = 3.2  # tCO2e/ha/season proxy
+    baseline_total = baseline_intensity * area_ha
+
+    if project_irrig_events <= baseline_irrig_events:
+        reduction_factor = 0.40
+        mode = "awd_proxy"
+    else:
+        reduction_factor = 0.10
+        mode = "minor_water_mgmt_proxy"
+
+    delta_mid = baseline_total * reduction_factor
+    assumptions = f"rice_methane_{mode};baseline_intensity={baseline_intensity}tco2e_per_ha"
+    return float(max(delta_mid, 0.0)), assumptions
+
+
+# -----------------------------
+# Placeholder delta estimator (corn + rice methane add-on)
 # -----------------------------
 def estimate_season_delta_tco2e(
     area_ha: float,
@@ -85,15 +117,16 @@ def estimate_season_delta_tco2e(
     project_events: List[Dict[str, str]],
 ) -> Tuple[float, str]:
     """
-    Placeholder delta model (MVP only):
-    - If project has fewer tillage events than baseline => small benefit
-    - If fertilizer amount reduced (sum of 'amount') => moderate benefit
-    - If irrigation events reduced => tiny benefit (energy proxy)
+    MVP delta model:
+    - Reduced tillage => small benefit
+    - Fertilizer amount reduction => moderate benefit
+    - Irrigation events reduction => tiny benefit (energy proxy)
+    - If crop_type == rice => add methane reduction proxy based on irrigation pattern (AWD proxy)
 
-    NOTE: Rice methane is NOT modeled yet (we note it in assumptions).
+    Returns: (delta_mid_tco2e, assumptions_str)
     """
-
     crop_type = _clean(crop_type).lower()
+    area_ha = max(float(area_ha or 0.0), 0.0)
 
     def count_type(events: List[Dict[str, str]], t: str) -> int:
         t = t.lower()
@@ -124,7 +157,7 @@ def estimate_season_delta_tco2e(
 
     # small: reduced tillage -> 0.10 tCO2e/ha per fewer tillage op (placeholder)
     if proj_tillage < base_tillage:
-        d = (base_tillage - proj_tillage) * 0.10 * max(area_ha, 0.0)
+        d = (base_tillage - proj_tillage) * 0.10 * area_ha
         delta += d
         assumptions.append("reduced_tillage_proxy")
 
@@ -136,12 +169,19 @@ def estimate_season_delta_tco2e(
 
     # tiny: fewer irrigation events -> 0.02 tCO2e/ha per fewer irrigation event (placeholder)
     if proj_irr < base_irr:
-        d = (base_irr - proj_irr) * 0.02 * max(area_ha, 0.0)
+        d = (base_irr - proj_irr) * 0.02 * area_ha
         delta += d
         assumptions.append("irrigation_energy_proxy")
 
+    # ✅ Rice methane add-on (this is the big one for rice)
     if crop_type == "rice":
-        assumptions.append("rice_methane_not_modeled_yet")
+        rice_delta, rice_assump = _rice_methane_delta_tco2e(
+            area_ha=area_ha,
+            baseline_irrig_events=base_irr,
+            project_irrig_events=proj_irr,
+        )
+        delta += rice_delta
+        assumptions.append(rice_assump)
 
     if not assumptions:
         assumptions.append("no_detected_changes")
@@ -208,14 +248,13 @@ def run_estimates(data_dir: str) -> None:
 
         fld = fields.get(field_id)
         if not fld:
-            # field referenced in seasons.csv doesn't exist in fields.csv
             continue
 
         # area_ha might have different header names; try a few
         area_ha_str = _pick(
             fld,
             ["area_ha", "Area (ha)", "AREA_HA", "areaHa"],
-            required=False
+            required=False,
         )
         area_ha = _as_float(area_ha_str, default=0.0)
 
