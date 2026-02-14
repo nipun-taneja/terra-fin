@@ -7,17 +7,31 @@ import LoginView from "@/components/LoginView";
 import RegisterView from "@/components/RegisterView";
 import OnboardingView from "@/components/OnboardingView";
 import DashboardView from "@/components/DashboardView";
-import { AppView, FarmConfig, DashboardField } from "@/lib/types";
+import { AppView, FarmConfig, DashboardField, ProfileResponse } from "@/lib/types";
+import { buildDashboardFields } from "@/lib/api";
 
 export default function Home() {
   const [view, setView] = useState<AppView>("landing");
   const [farm, setFarm] = useState<FarmConfig | null>(null);
   const [dashFields, setDashFields] = useState<DashboardField[]>([]);
   const [editingFromDashboard, setEditingFromDashboard] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
 
   const handleVerified = () => {
     setEditingFromDashboard(false);
     setView("onboarding");
+  };
+
+  const handleLoginSuccess = (profile: ProfileResponse) => {
+    setUserEmail(profile.email);
+    if (profile.farm && profile.fields.length > 0) {
+      setFarm(profile.farm);
+      const fields = buildDashboardFields(profile.fields, profile.latest_analysis);
+      setDashFields(fields);
+      setView("dashboard");
+    } else {
+      setView("onboarding");
+    }
   };
 
   const handleOnboardingComplete = (farmConfig: FarmConfig, fields: DashboardField[]) => {
@@ -41,7 +55,7 @@ export default function Home() {
   }
 
   if (view === "login") {
-    return <LoginView onLogin={handleVerified} onNavigate={setView} />;
+    return <LoginView onLogin={handleLoginSuccess} onNavigate={setView} />;
   }
 
   if (view === "register") {
@@ -55,6 +69,7 @@ export default function Home() {
         initialFarm={editingFromDashboard ? farm : null}
         initialFields={editingFromDashboard ? dashFields : undefined}
         initialStep={editingFromDashboard ? 1 : 0}
+        userEmail={userEmail}
       />
     );
   }

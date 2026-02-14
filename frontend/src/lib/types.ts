@@ -71,6 +71,7 @@ export interface RoadmapStep {
 }
 
 export interface AnalyzeResponse {
+    analysis_id?: string;
     location: { lat: number; lon: number };
     crop_type: string;
     satellite: {
@@ -119,3 +120,10 @@ export interface DashboardField {
 }
 
 export type AppView = "landing" | "login" | "register" | "onboarding" | "dashboard" | "how-it-works";
+
+export interface ProfileResponse {
+    email: string;
+    farm: FarmConfig | null;
+    fields: FieldConfig[];
+    latest_analysis: AnalyzeResponse | null;
+}

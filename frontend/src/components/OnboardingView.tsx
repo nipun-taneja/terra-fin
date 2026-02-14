@@ -12,13 +12,14 @@ import {
     CheckCircle2,
 } from "lucide-react";
 import { FieldConfig, FarmConfig, BaselineInputs, AnalyzeResponse, DashboardField } from "@/lib/types";
-import { analyzeField, buildStepsFromRoadmap, buildTimeline } from "@/lib/api";
+import { analyzeField, buildStepsFromRoadmap, buildTimeline, saveFarm, saveProfileLink } from "@/lib/api";
 
 interface Props {
     onComplete: (farm: FarmConfig, dashFields: DashboardField[]) => void;
     initialFarm?: FarmConfig | null;
     initialFields?: DashboardField[];
     initialStep?: number;
+    userEmail?: string | null;
 }
 
 interface LngLatLike {
@@ -95,7 +96,7 @@ interface MapboxDrawLike {
 }
 
 interface MapboxDrawCtor {
-    new (opts: {
+    new(opts: {
         displayControlsDefault: boolean;
         controls: {
             polygon: boolean;
@@ -148,7 +149,7 @@ const makeSessionToken = (): string => {
     return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
-export default function OnboardingView({ onComplete, initialFarm, initialFields, initialStep = 0 }: Props) {
+export default function OnboardingView({ onComplete, initialFarm, initialFields, initialStep = 0, userEmail }: Props) {
     const [farm, setFarm] = useState<FarmConfig>(
         initialFarm ? { ...initialFarm } : { farm_name: "", state: "", country: "" }
     );
@@ -570,6 +571,9 @@ export default function OnboardingView({ onComplete, initialFarm, initialFields,
             let analysis: AnalyzeResponse;
             try {
                 analysis = await analyzeField(f);
+                if (userEmail && analysis.analysis_id) {
+                    await saveProfileLink(userEmail, analysis.analysis_id);
+                }
             } catch {
                 setProgress((p) => [...p, `! Failed for ${f.field_name}, using estimates`]);
                 continue;
@@ -585,6 +589,15 @@ export default function OnboardingView({ onComplete, initialFarm, initialFields,
             });
             setProgress((p) => [...p, `+ ${f.field_name} complete`]);
         }
+
+        if (userEmail && dashFields.length > 0) {
+            try {
+                await saveFarm(userEmail, farm, fields);
+            } catch (e) {
+                console.warn("[Onboarding] Failed to save farm to profile:", e);
+            }
+        }
+
         setAnalyzing(false);
         if (dashFields.length > 0) onComplete(farm, dashFields);
     };

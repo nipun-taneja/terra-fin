@@ -7,10 +7,11 @@ import {
     ArrowRight,
     Loader2,
 } from "lucide-react";
-import { AppView } from "@/lib/types";
+import { AppView, ProfileResponse } from "@/lib/types";
+import { loadProfile } from "@/lib/api";
 
 interface Props {
-    onLogin: () => void;
+    onLogin: (profile: ProfileResponse) => void;
     onNavigate: (view: AppView) => void;
 }
 
@@ -19,14 +20,23 @@ export default function LoginView({ onLogin, onNavigate }: Props) {
     const [password, setPassword] = useState("");
     const [isLoading, setIsLoading] = useState(false);
 
-    const handleLogin = (e: React.FormEvent) => {
+    const [error, setError] = useState<string | null>(null);
+
+    const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
-        // Simulate login
-        setTimeout(() => {
+        setError(null);
+
+        try {
+            // Real data retrieval
+            const profile = await loadProfile(email);
+            onLogin(profile);
+        } catch (err: any) {
+            console.error("[Login] Failed:", err);
+            setError(err.message || "Login failed. Please check your connection.");
+        } finally {
             setIsLoading(false);
-            onLogin();
-        }, 1200);
+        }
     };
 
     return (
@@ -44,6 +54,11 @@ export default function LoginView({ onLogin, onNavigate }: Props) {
                 </div>
 
                 <div className="glass-card p-8 space-y-6">
+                    {error && (
+                        <div className="p-3 rounded-xl bg-red-400/10 border border-red-400/20 text-red-400 text-sm font-medium botanical-reveal">
+                            {error}
+                        </div>
+                    )}
                     <form onSubmit={handleLogin} className="space-y-4">
                         <div>
                             <label className="block text-sm font-medium text-muted mb-1.5">Email</label>
