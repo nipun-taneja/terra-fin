@@ -1,0 +1,69 @@
+{
+    "satellite": {
+        "ndvi_mean": 0.61,
+        "ndvi_trend": 0.04,
+        "cropland_confidence": 0.90
+    },
+    "baseline": {
+        "baseline_tco2e_y": 125.0,
+        "emissions_percentile_est": 65.0
+    },
+    "suggestions": [
+        {
+            "title": "Optimize nitrogen application",
+            "why": "Reduce excess nitrogen losses that increase N2O emissions.",
+            "actions": [
+                "Soil test before fertilization",
+                "Split nitrogen applications",
+                "Avoid fertilizing before heavy rainfall"
+            ],
+            "expected_reduction_pct": [
+                8,
+                18
+            ],
+            "annual_tco2e_saved": [
+                10,
+                22
+            ],
+            "upfront_cost_usd": [
+                100,
+                600
+            ],
+            "timeline": "0–3 months"
+        },
+        {
+            "title": "Adopt reduced tillage",
+            "why": "Lower fuel usage and improve soil structure.",
+            "actions": [
+                "Switch to strip till",
+                "Track fuel savings per hectare"
+            ],
+            "expected_reduction_pct": [
+                3,
+                10
+            ],
+            "upfront_cost_usd": [
+                0,
+                1500
+            ],
+            "timeline": "3–12 months"
+        },
+        {
+            "title": "Introduce cover crops",
+            "why": "Improve soil health and reduce fertilizer dependency.",
+            "actions": [
+                "Pilot on one field",
+                "Choose regionally appropriate cover species"
+            ],
+            "expected_reduction_pct": [
+                2,
+                8
+            ],
+            "upfront_cost_usd": [
+                200,
+                1200
+            ],
+            "timeline": "Next season"
+        }
+    ]
+}
