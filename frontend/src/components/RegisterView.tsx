@@ -222,8 +222,7 @@ export default function RegisterView({ onVerified }: Props) {
                                     <div className="space-y-1">
                                         <div className="inline-flex items-center gap-1 text-[#6F7D73] text-xs font-semibold tracking-[0.08em] uppercase">
                                             <Sparkles className="h-3.5 w-3.5" />
-                                            <span className="text-sm font-bold text-[#2D3A31]">CRS</span>
-                                            <span>Verified</span>
+                                            <span className="text-sm font-bold text-[#2D3A31]">Identity Verified by CRS</span>
                                         </div>
                                         <h3 className="font-display text-2xl leading-tight font-semibold">
                                             Welcome {welcomeFirstName},
