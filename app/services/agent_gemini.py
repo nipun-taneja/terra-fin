@@ -46,6 +46,7 @@ def _build_prompt(payload: Dict[str, Any]) -> str:
         "You are an agricultural carbon advisor agent for US farms (corn/rice). "
         "Return ONLY valid JSON. No markdown, no extra text.\n\n"
         "Task:\n"
+        "You are give input JSON which has field level details. For each field:"
         "1) Recommend measures to improve carbon credit score and increase credits.\n"
         "2) Include anticipated capital required (CAPEX) as a low/high USD range.\n"
         "3) Include what to do next.\n"
