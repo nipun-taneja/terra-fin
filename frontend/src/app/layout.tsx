@@ -15,9 +15,14 @@ const sourceSans = Source_Sans_3({
 });
 
 export const metadata: Metadata = {
-  title: "Terra30 - Carbon Credit Platform for Farmers",
+  title: "FarmFin - Carbon Credit Platform for Farmers",
   description:
     "Verify your identity, onboard your farm, and unlock carbon credit revenue with AI-powered analysis.",
+  icons: {
+    icon: "/icon.svg",
+    shortcut: "/icon.svg",
+    apple: "/apple-icon.svg",
+  },
 };
 
 export default function RootLayout({

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React from "react";
 import { AppView } from "@/lib/types";
@@ -21,10 +21,8 @@ const LandingView: React.FC<LandingViewProps> = ({ onNavigate }) => {
                         onClick={() => onNavigate("landing")}
                         className="flex items-center gap-2 cursor-pointer group"
                     >
-                        <div className="w-8 h-8 rounded-lg bg-[#2D3A31] flex items-center justify-center text-[#F9F8F4] font-display font-bold text-sm transition-transform group-hover:scale-110">
-                            TF
-                        </div>
-                        <span className="font-display font-bold text-xl text-[#2D3A31] tracking-tight">TerraFin</span>
+                        <div className="w-8 h-8 rounded-lg bg-[#2D3A31] flex items-center justify-center text-[#F9F8F4] font-display font-bold text-sm transition-transform group-hover:scale-110">FF</div>
+                        <span className="font-display font-bold text-xl text-[#2D3A31] tracking-tight">FarmFin</span>
                     </div>
 
                     {/* Navigation */}
@@ -52,9 +50,7 @@ const LandingView: React.FC<LandingViewProps> = ({ onNavigate }) => {
                 <div className="max-w-5xl mx-auto text-center botanical-reveal">
                     {/* Logo large */}
                     <div className="mb-4 flex justify-center">
-                        <div className="w-14 h-14 rounded-2xl bg-[#2D3A31] flex items-center justify-center text-[#F9F8F4] font-display font-bold text-2xl shadow-2xl">
-                            TF
-                        </div>
+                        <div className="w-14 h-14 rounded-2xl bg-[#2D3A31] flex items-center justify-center text-[#F9F8F4] font-display font-bold text-2xl shadow-2xl">FF</div>
                     </div>
 
                     <h1 className="text-3xl md:text-5xl font-display font-bold text-[#2D3A31] mb-3 leading-tight">
@@ -63,7 +59,7 @@ const LandingView: React.FC<LandingViewProps> = ({ onNavigate }) => {
                     </h1>
 
                     <p className="text-sm md:text-base text-[#2D3A31]/70 max-w-xl mx-auto mb-6 leading-relaxed">
-                        TerraFin empowers farmers to transform sustainable practices into verified carbon credits,
+                        FarmFin empowers farmers to transform sustainable practices into verified carbon credits,
                         unlocking new financial streams while protecting the planet
                     </p>
 
@@ -146,14 +142,14 @@ const LandingView: React.FC<LandingViewProps> = ({ onNavigate }) => {
                         <div className="w-6 h-6 rounded bg-[#F9F8F4] flex items-center justify-center text-[#2D3A31] font-display font-bold text-xs">
                             T
                         </div>
-                        <span className="font-display font-bold text-white tracking-tight">TerraFin</span>
+                        <span className="font-display font-bold text-white tracking-tight">FarmFin</span>
                     </div>
                     <div className="flex gap-8 text-sm">
                         <a href="#" className="hover:text-white transition-colors">Privacy Policy</a>
                         <a href="#" className="hover:text-white transition-colors">Terms of Service</a>
                         <a href="#" className="hover:text-white transition-colors">Contact Us</a>
                     </div>
-                    <p className="text-xs">© 2026 TerraFin. All rights reserved.</p>
+                    <p className="text-xs">© 2026 FarmFin. All rights reserved.</p>
                 </div>
             </footer>
 
@@ -165,3 +161,5 @@ const LandingView: React.FC<LandingViewProps> = ({ onNavigate }) => {
 };
 
 export default LandingView;
+
+

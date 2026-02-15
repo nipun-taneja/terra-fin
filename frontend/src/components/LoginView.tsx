@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import {
@@ -47,7 +47,7 @@ export default function LoginView({ onLogin, onNavigate }: Props) {
                         onClick={() => onNavigate("landing")}
                         className="inline-flex items-center justify-center h-16 w-16 rounded-3xl bg-[#2D3A31] mb-6 cursor-pointer hover:scale-105 transition-transform shadow-xl"
                     >
-                        <span className="text-[#F9F8F4] font-display font-bold text-2xl">TF</span>
+                        <span className="text-[#F9F8F4] font-display font-bold text-2xl">FF</span>
                     </div>
                     <h1 className="font-display text-4xl font-bold text-[#2D3A31]">Welcome Back</h1>
                     <p className="text-muted mt-2">Access your carbon dashboard</p>
@@ -83,7 +83,7 @@ export default function LoginView({ onLogin, onNavigate }: Props) {
                                     type="password"
                                     required
                                     className="w-full pl-11 pr-4 py-3 glass-input outline-none focus:border-[#8C9A84] transition-all"
-                                    placeholder="••••••••"
+                                    placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
                                 />
@@ -130,3 +130,5 @@ export default function LoginView({ onLogin, onNavigate }: Props) {
         </div>
     );
 }
+
+

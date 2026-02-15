@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useState, useCallback, type ReactNode } from "react";
+import { useState, useCallback, type ChangeEvent, type ReactNode } from "react";
 import {
     TrendingUp,
     Calendar,
@@ -16,6 +16,8 @@ import {
     Award,
     FileText,
     MapPin,
+    Upload,
+    X,
 } from "lucide-react";
 import {
     AreaChart,
@@ -40,6 +42,21 @@ interface Props {
     fundingData?: FundingPathwayPayload;
 }
 
+type VaultFile = {
+    id: string;
+    name: string;
+    size: number;
+    type: string;
+    tag: string;
+    uploadedAt: string;
+};
+
+type PendingVaultFile = {
+    id: string;
+    file: File;
+    tag: string;
+};
+
 export default function DashboardView({ farm, fields, onFieldsChange, onBack, fundingData }: Props) {
     const [activeTab, setActiveTab] = useState(0);
     const [activeDrawerTab, setActiveDrawerTab] = useState<"overview" | "funding" | "verification" | "export">("overview");
@@ -50,6 +67,11 @@ export default function DashboardView({ farm, fields, onFieldsChange, onBack, fu
     const [downloadingCriminalReport, setDownloadingCriminalReport] = useState(false);
     const [downloadingFlexIdPdf, setDownloadingFlexIdPdf] = useState(false);
     const [downloadingFraudPdf, setDownloadingFraudPdf] = useState(false);
+    const [vaultTag, setVaultTag] = useState("");
+    const [vaultFiles, setVaultFiles] = useState<VaultFile[]>([]);
+    const [pendingVaultFiles, setPendingVaultFiles] = useState<PendingVaultFile[]>([]);
+    const [uploadingVault, setUploadingVault] = useState(false);
+    const [vaultError, setVaultError] = useState<string | null>(null);
 
     const activeField = fields[activeTab];
 
@@ -191,23 +213,6 @@ export default function DashboardView({ farm, fields, onFieldsChange, onBack, fu
             funding: fundingData ?? getFallbackFundingPayload(),
         };
         downloadBlob(JSON.stringify(payload, null, 2), "application/json", `full-portfolio-report-${new Date().toISOString().slice(0, 10)}.json`);
-    };
-
-    const handleExportLenderPacket = () => {
-        const crs = getCrsSnapshot();
-        const payload = {
-            generated_at: new Date().toISOString(),
-            export_type: "lender_packet_pdf",
-            note: "PDF renderer not integrated yet. JSON payload included for demo.",
-            farm,
-            crs_summary: crs,
-            finance_projection: {
-                estimated_credit_balance_usd: totalCredits,
-                baseline_tco2e_y: totalBaseline,
-                top_offer: (fundingData ?? getFallbackFundingPayload()).offers.ranked_offers[0] ?? null,
-            },
-        };
-        downloadBlob(JSON.stringify(payload, null, 2), "application/json", `lender-packet-${new Date().toISOString().slice(0, 10)}.json`);
     };
 
     const handleDownloadCreditBureauPdf = async () => {
@@ -449,6 +454,67 @@ export default function DashboardView({ farm, fields, onFieldsChange, onBack, fu
         downloadBlob(JSON.stringify(payload, null, 2), "application/json", `forecast-sensitivity-${new Date().toISOString().slice(0, 10)}.json`);
     };
 
+    const handleVaultSelect = (event: ChangeEvent<HTMLInputElement>) => {
+        const picked = event.target.files;
+        if (!picked || picked.length === 0) return;
+
+        const defaultTag = vaultTag.trim();
+        if (defaultTag.length > 40) {
+            setVaultError("Tag is too long. Keep it within 40 characters.");
+            return;
+        }
+
+        const next: PendingVaultFile[] = Array.from(picked).map((f) => ({
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            file: f,
+            tag: defaultTag || "untagged",
+        }));
+        setPendingVaultFiles((prev) => [...next, ...prev]);
+        setVaultError(null);
+        setVaultTag("");
+        event.target.value = "";
+    };
+
+    const updatePendingTag = (id: string, tag: string) => {
+        setPendingVaultFiles((prev) => prev.map((f) => (f.id === id ? { ...f, tag } : f)));
+    };
+
+    const removePendingFile = (id: string) => {
+        setPendingVaultFiles((prev) => prev.filter((f) => f.id !== id));
+    };
+
+    const uploadPendingFiles = async () => {
+        if (pendingVaultFiles.length === 0) {
+            setVaultError("Select at least one file to upload.");
+            return;
+        }
+        const hasInvalidTag = pendingVaultFiles.some((f) => f.tag.trim().length > 40);
+        if (hasInvalidTag) {
+            setVaultError("One or more tags are longer than 40 characters.");
+            return;
+        }
+
+        setUploadingVault(true);
+        setVaultError(null);
+        await new Promise((resolve) => setTimeout(resolve, 450));
+
+        const uploaded: VaultFile[] = pendingVaultFiles.map((f) => ({
+            id: f.id,
+            name: f.file.name,
+            size: f.file.size,
+            type: f.file.type || "application/octet-stream",
+            tag: f.tag.trim() || "untagged",
+            uploadedAt: new Date().toISOString(),
+        }));
+        setVaultFiles((prev) => [...uploaded, ...prev]);
+        setPendingVaultFiles([]);
+        setUploadingVault(false);
+    };
+
+    const removeVaultFile = (id: string) => {
+        setVaultFiles((prev) => prev.filter((f) => f.id !== id));
+    };
+
     if (fields.length === 0) {
         return (
             <div className="min-h-screen flex items-center justify-center px-4">
@@ -496,19 +562,17 @@ export default function DashboardView({ farm, fields, onFieldsChange, onBack, fu
                             <button
                                 onClick={() => window.location.assign("/")}
                                 className="inline-flex items-center cursor-pointer group shrink-0"
-                                aria-label="Go to TerraFin home"
-                                title="TerraFin home"
+                                aria-label="Go to FarmFin home"
+                                title="FarmFin home"
                             >
-                                <span className="w-8 h-8 rounded-lg bg-[#2D3A31] flex items-center justify-center text-[#F9F8F4] font-display font-bold text-sm transition-transform group-hover:scale-110">
-                                    TF
-                                </span>
+                                <span className="w-8 h-8 rounded-lg bg-[#2D3A31] flex items-center justify-center text-[#F9F8F4] font-display font-bold text-sm transition-transform group-hover:scale-110">FF</span>
                             </button>
 
                             {[
                                 { id: "overview", label: "Overview" },
                                 { id: "funding", label: "Funding Pathway" },
                                 { id: "verification", label: "Verification" },
-                                { id: "export", label: "Export" },
+                                { id: "export", label: "Compliance Vault" },
                             ].map((tab) => (
                                 <button
                                     key={tab.id}
@@ -813,97 +877,220 @@ export default function DashboardView({ farm, fields, onFieldsChange, onBack, fu
 
                         {activeDrawerTab === "export" && (
                             <div className="space-y-6">
-                                <p className="text-sm text-muted -mt-3">Download reports for lenders, verification, registry submission, and operations.</p>
+                                <div className="rounded-2xl border border-[#D9E5D8] bg-[#EFF6EF] p-6">
+                                    <h4 className="font-display text-2xl font-semibold text-[#2D3A31]">Compliance Vault</h4>
+                                    <p className="text-sm text-[#4D5C54] mt-1">
+                                        Export lender-ready documents and upload supporting evidence with tags for easier review.
+                                    </p>
+                                </div>
 
-                                <div className="space-y-4">
-                                    <div className="rounded-2xl border border-[#E6E2DA] bg-[#F8F6F0] p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                                        <div>
-                                            <h5 className="font-display text-lg font-semibold text-[#2D3A31]">Full Portfolio Report</h5>
-                                            <p className="text-sm text-muted mt-1.5">Farm summary, baseline, reductions, funding pathway, and verification status.</p>
-                                            <p className="text-xs text-[#7A847E] mt-1">Uses available dashboard and funding data. PDF is represented as JSON in this demo.</p>
+                                <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+                                    <div className="xl:col-span-2 space-y-4">
+                                        <div className="rounded-2xl border border-[#E6E2DA] bg-[#F8F6F0] p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                                            <div>
+                                                <h5 className="font-display text-lg font-semibold text-[#2D3A31]">Full Portfolio Report</h5>
+                                                <p className="text-sm text-muted mt-1.5">Farm summary, baseline, reductions, funding pathway, and verification status.</p>
+                                                <p className="text-xs text-[#7A847E] mt-1">Uses available dashboard and funding data. PDF is represented as JSON in this demo.</p>
+                                            </div>
+                                            <button
+                                                onClick={handleExportFullPortfolio}
+                                                className="px-5 py-3 rounded-2xl border border-[#D8D3C8] bg-white/80 text-[#2D3A31] text-sm font-medium inline-flex items-center gap-3 hover:bg-white transition-colors self-start md:self-auto"
+                                            >
+                                                <Download className="h-5 w-5" />
+                                                Export Report
+                                            </button>
                                         </div>
-                                        <button
-                                            onClick={handleExportFullPortfolio}
-                                            className="px-5 py-3 rounded-2xl border border-[#D8D3C8] bg-white/80 text-[#2D3A31] text-sm font-medium inline-flex items-center gap-3 hover:bg-white transition-colors self-start md:self-auto"
-                                        >
-                                            <Download className="h-5 w-5" />
-                                            Export Report
-                                        </button>
+
+                                        <div className="rounded-2xl border border-[#E6E2DA] bg-[#F8F6F0] p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                                            <div>
+                                                <h5 className="font-display text-lg font-semibold text-[#2D3A31]">Verification Evidence ZIP</h5>
+                                                <p className="text-sm text-muted mt-1.5">Evidence checklist, logs index, and appraiser-ready artifacts bundle.</p>
+                                                <p className="text-xs text-[#7A847E] mt-1">ZIP packaging uses demo placeholder file references for now.</p>
+                                            </div>
+                                            <button
+                                                onClick={handleExportEvidenceZip}
+                                                className="px-5 py-3 rounded-2xl border border-[#D8D3C8] bg-white/80 text-[#2D3A31] text-sm font-medium inline-flex items-center gap-3 hover:bg-white transition-colors self-start md:self-auto"
+                                            >
+                                                <Download className="h-5 w-5" />
+                                                Export Evidence
+                                            </button>
+                                        </div>
+
+                                        <div className="rounded-2xl border border-[#E6E2DA] bg-[#F8F6F0] p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                                            <div>
+                                                <h5 className="font-display text-lg font-semibold text-[#2D3A31]">Carbon Registry Submission</h5>
+                                                <p className="text-sm text-muted mt-1.5">Structured field and reduction data package for registry onboarding.</p>
+                                                <p className="text-xs text-[#7A847E] mt-1">Uses available field config and analysis outputs.</p>
+                                            </div>
+                                            <button
+                                                onClick={handleExportRegistrySubmission}
+                                                className="px-5 py-3 rounded-2xl border border-[#D8D3C8] bg-white/80 text-[#2D3A31] text-sm font-medium inline-flex items-center gap-3 hover:bg-white transition-colors self-start md:self-auto"
+                                            >
+                                                <Download className="h-5 w-5" />
+                                                Export Registry CSV
+                                            </button>
+                                        </div>
+
+                                        <div className="rounded-2xl border border-[#E6E2DA] bg-[#F8F6F0] p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                                            <div>
+                                                <h5 className="font-display text-lg font-semibold text-[#2D3A31]">Funding Application Bundle</h5>
+                                                <p className="text-sm text-muted mt-1.5">Offer matches, required docs, and package-ready application details.</p>
+                                                <p className="text-xs text-[#7A847E] mt-1">Provider prefill fields include demo placeholders where unavailable.</p>
+                                            </div>
+                                            <button
+                                                onClick={handleExportFundingBundle}
+                                                className="px-5 py-3 rounded-2xl border border-[#D8D3C8] bg-white/80 text-[#2D3A31] text-sm font-medium inline-flex items-center gap-3 hover:bg-white transition-colors self-start md:self-auto"
+                                            >
+                                                <Download className="h-5 w-5" />
+                                                Export Bundle
+                                            </button>
+                                        </div>
+
+                                        <div className="rounded-2xl border border-[#E6E2DA] bg-[#F8F6F0] p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                                            <div>
+                                                <h5 className="font-display text-lg font-semibold text-[#2D3A31]">Practice Change Log</h5>
+                                                <p className="text-sm text-muted mt-1.5">Operational log for tillage, fertilizer, irrigation, and completion state.</p>
+                                                <p className="text-xs text-[#7A847E] mt-1">Built from current step/action data in dashboard.</p>
+                                            </div>
+                                            <button
+                                                onClick={handleExportPracticeLog}
+                                                className="px-5 py-3 rounded-2xl border border-[#D8D3C8] bg-white/80 text-[#2D3A31] text-sm font-medium inline-flex items-center gap-3 hover:bg-white transition-colors self-start md:self-auto"
+                                            >
+                                                <Download className="h-5 w-5" />
+                                                Export Log CSV
+                                            </button>
+                                        </div>
+
+                                        <div className="rounded-2xl border border-[#E6E2DA] bg-[#F8F6F0] p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                                            <div>
+                                                <h5 className="font-display text-lg font-semibold text-[#2D3A31]">Forecast & Sensitivity Workbook</h5>
+                                                <p className="text-sm text-muted mt-1.5">Low, mid, high value scenarios for planning and lender discussions.</p>
+                                                <p className="text-xs text-[#7A847E] mt-1">XLSX output is mocked as JSON table in this demo and clearly labeled.</p>
+                                            </div>
+                                            <button
+                                                onClick={handleExportForecastWorkbook}
+                                                className="px-5 py-3 rounded-2xl border border-[#D8D3C8] bg-white/80 text-[#2D3A31] text-sm font-medium inline-flex items-center gap-3 hover:bg-white transition-colors self-start md:self-auto"
+                                            >
+                                                <Download className="h-5 w-5" />
+                                                Export Workbook
+                                            </button>
+                                        </div>
                                     </div>
 
-                                    <div className="rounded-2xl border border-[#E6E2DA] bg-[#F8F6F0] p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                                        <div>
-                                            <h5 className="font-display text-lg font-semibold text-[#2D3A31]">Verification Evidence ZIP</h5>
-                                            <p className="text-sm text-muted mt-1.5">Evidence checklist, logs index, and appraiser-ready artifacts bundle.</p>
-                                            <p className="text-xs text-[#7A847E] mt-1">ZIP packaging uses demo placeholder file references for now.</p>
-                                        </div>
-                                        <button
-                                            onClick={handleExportEvidenceZip}
-                                            className="px-5 py-3 rounded-2xl border border-[#D8D3C8] bg-white/80 text-[#2D3A31] text-sm font-medium inline-flex items-center gap-3 hover:bg-white transition-colors self-start md:self-auto"
-                                        >
-                                            <Download className="h-5 w-5" />
-                                            Export Evidence
-                                        </button>
-                                    </div>
+                                    <div className="xl:col-span-1">
+                                        <div className="rounded-2xl border border-[#E6E2DA] bg-white/70 p-5 xl:sticky xl:top-24">
+                                            <h5 className="font-display text-xl font-semibold text-[#2D3A31]">Upload Documents</h5>
+                                            <p className="text-sm text-muted mt-1">Attach files to your vault and organize them with tags.</p>
 
-                                    <div className="rounded-2xl border border-[#E6E2DA] bg-[#F8F6F0] p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                                        <div>
-                                            <h5 className="font-display text-lg font-semibold text-[#2D3A31]">Carbon Registry Submission</h5>
-                                            <p className="text-sm text-muted mt-1.5">Structured field and reduction data package for registry onboarding.</p>
-                                            <p className="text-xs text-[#7A847E] mt-1">Uses available field config and analysis outputs.</p>
-                                        </div>
-                                        <button
-                                            onClick={handleExportRegistrySubmission}
-                                            className="px-5 py-3 rounded-2xl border border-[#D8D3C8] bg-white/80 text-[#2D3A31] text-sm font-medium inline-flex items-center gap-3 hover:bg-white transition-colors self-start md:self-auto"
-                                        >
-                                            <Download className="h-5 w-5" />
-                                            Export Registry CSV
-                                        </button>
-                                    </div>
+                                            <div className="mt-4 space-y-3">
+                                                <div>
+                                                    <label className="text-xs font-semibold tracking-[0.12em] uppercase text-muted">Default tag (optional)</label>
+                                                    <input
+                                                        value={vaultTag}
+                                                        onChange={(e) => setVaultTag(e.target.value)}
+                                                        maxLength={40}
+                                                        placeholder="Applied to newly selected files"
+                                                        className="mt-1 w-full px-3 py-2 rounded-xl border border-[#E6E2DA] bg-white text-sm text-[#2D3A31] outline-none focus:border-[#8C9A84]"
+                                                    />
+                                                </div>
 
-                                    <div className="rounded-2xl border border-[#E6E2DA] bg-[#F8F6F0] p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                                        <div>
-                                            <h5 className="font-display text-lg font-semibold text-[#2D3A31]">Funding Application Bundle</h5>
-                                            <p className="text-sm text-muted mt-1.5">Offer matches, required docs, and package-ready application details.</p>
-                                            <p className="text-xs text-[#7A847E] mt-1">Provider prefill fields include demo placeholders where unavailable.</p>
-                                        </div>
-                                        <button
-                                            onClick={handleExportFundingBundle}
-                                            className="px-5 py-3 rounded-2xl border border-[#D8D3C8] bg-white/80 text-[#2D3A31] text-sm font-medium inline-flex items-center gap-3 hover:bg-white transition-colors self-start md:self-auto"
-                                        >
-                                            <Download className="h-5 w-5" />
-                                            Export Bundle
-                                        </button>
-                                    </div>
+                                                <label className="w-full px-4 py-3 rounded-xl border border-dashed border-[#CDBFAF] bg-[#F8F6F0] text-[#2D3A31] text-sm font-medium inline-flex items-center justify-center gap-2 cursor-pointer hover:bg-white transition-colors">
+                                                    <Upload className="h-4 w-4" />
+                                                    Select Files
+                                                    <input
+                                                        type="file"
+                                                        multiple
+                                                        onChange={handleVaultSelect}
+                                                        className="hidden"
+                                                        accept=".pdf,.csv,.xlsx,.xls,.png,.jpg,.jpeg,.json"
+                                                    />
+                                                </label>
+                                                <button
+                                                    onClick={uploadPendingFiles}
+                                                    disabled={pendingVaultFiles.length === 0 || uploadingVault}
+                                                    className="w-full px-4 py-2.5 rounded-xl border border-[#D8D3C8] bg-white/80 text-[#2D3A31] text-sm font-semibold inline-flex items-center justify-center gap-2 hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                >
+                                                    <Upload className="h-4 w-4" />
+                                                    {uploadingVault ? "Uploading..." : `Upload to Vault (${pendingVaultFiles.length})`}
+                                                </button>
+                                                {vaultError && <p className="text-xs text-[#A25252]">{vaultError}</p>}
+                                                <p className="text-xs text-[#7A847E]">Uploads are saved in this browser session for demo purposes.</p>
+                                            </div>
 
-                                    <div className="rounded-2xl border border-[#E6E2DA] bg-[#F8F6F0] p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                                        <div>
-                                            <h5 className="font-display text-lg font-semibold text-[#2D3A31]">Practice Change Log</h5>
-                                            <p className="text-sm text-muted mt-1.5">Operational log for tillage, fertilizer, irrigation, and completion state.</p>
-                                            <p className="text-xs text-[#7A847E] mt-1">Built from current step/action data in dashboard.</p>
-                                        </div>
-                                        <button
-                                            onClick={handleExportPracticeLog}
-                                            className="px-5 py-3 rounded-2xl border border-[#D8D3C8] bg-white/80 text-[#2D3A31] text-sm font-medium inline-flex items-center gap-3 hover:bg-white transition-colors self-start md:self-auto"
-                                        >
-                                            <Download className="h-5 w-5" />
-                                            Export Log CSV
-                                        </button>
-                                    </div>
+                                            <div className="mt-5">
+                                                <div className="flex items-center justify-between">
+                                                    <h6 className="text-sm font-semibold text-[#2D3A31]">Selected Files</h6>
+                                                    <span className="text-xs text-muted">{pendingVaultFiles.length} queued</span>
+                                                </div>
+                                                <div className="mt-2 space-y-2 max-h-[220px] overflow-auto pr-1">
+                                                    {pendingVaultFiles.length === 0 && (
+                                                        <div className="text-xs text-muted border border-[#E6E2DA] rounded-xl bg-[#F8F6F0] px-3 py-3">
+                                                            No files selected.
+                                                        </div>
+                                                    )}
+                                                    {pendingVaultFiles.map((item) => (
+                                                        <div key={item.id} className="border border-[#E6E2DA] rounded-xl bg-[#F8F6F0] px-3 py-2.5">
+                                                            <div className="flex items-start justify-between gap-2">
+                                                                <div className="min-w-0 flex-1">
+                                                                    <p className="text-sm font-medium text-[#2D3A31] truncate">{item.file.name}</p>
+                                                                    <p className="text-xs text-muted mt-0.5">{formatFileSize(item.file.size)}</p>
+                                                                    <input
+                                                                        value={item.tag}
+                                                                        onChange={(e) => updatePendingTag(item.id, e.target.value)}
+                                                                        maxLength={40}
+                                                                        placeholder="Tag this file"
+                                                                        className="mt-2 w-full px-2.5 py-1.5 rounded-lg border border-[#D8D3C8] bg-white text-xs text-[#2D3A31] outline-none focus:border-[#8C9A84]"
+                                                                    />
+                                                                </div>
+                                                                <button
+                                                                    onClick={() => removePendingFile(item.id)}
+                                                                    className="h-7 w-7 rounded-full border border-[#D8D3C8] bg-white/80 inline-flex items-center justify-center text-[#7A847E] hover:text-[#2D3A31] hover:bg-white transition-colors"
+                                                                    title="Remove selected file"
+                                                                    aria-label="Remove selected file"
+                                                                >
+                                                                    <X className="h-3.5 w-3.5" />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
 
-                                    <div className="rounded-2xl border border-[#E6E2DA] bg-[#F8F6F0] p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                                        <div>
-                                            <h5 className="font-display text-lg font-semibold text-[#2D3A31]">Forecast & Sensitivity Workbook</h5>
-                                            <p className="text-sm text-muted mt-1.5">Low, mid, high value scenarios for planning and lender discussions.</p>
-                                            <p className="text-xs text-[#7A847E] mt-1">XLSX output is mocked as JSON table in this demo and clearly labeled.</p>
+                                            <div className="mt-5">
+                                                <div className="flex items-center justify-between">
+                                                    <h6 className="text-sm font-semibold text-[#2D3A31]">Vault Files</h6>
+                                                    <span className="text-xs text-muted">{vaultFiles.length} items</span>
+                                                </div>
+                                                <div className="mt-2 space-y-2 max-h-[340px] overflow-auto pr-1">
+                                                    {vaultFiles.length === 0 && (
+                                                        <div className="text-xs text-muted border border-[#E6E2DA] rounded-xl bg-[#F8F6F0] px-3 py-3">
+                                                            No files uploaded yet.
+                                                        </div>
+                                                    )}
+                                                    {vaultFiles.map((file) => (
+                                                        <div key={file.id} className="border border-[#E6E2DA] rounded-xl bg-[#F8F6F0] px-3 py-2.5">
+                                                            <div className="flex items-start justify-between gap-2">
+                                                                <div className="min-w-0">
+                                                                    <p className="text-sm font-medium text-[#2D3A31] truncate">{file.name}</p>
+                                                                    <div className="mt-1 flex items-center gap-2 text-xs text-muted">
+                                                                        <span className="rounded-full px-2 py-0.5 border border-[#D8D3C8] bg-white/70 text-[#5E6A63]">{file.tag}</span>
+                                                                        <span>{formatFileSize(file.size)}</span>
+                                                                    </div>
+                                                                </div>
+                                                                <button
+                                                                    onClick={() => removeVaultFile(file.id)}
+                                                                    className="h-7 w-7 rounded-full border border-[#D8D3C8] bg-white/80 inline-flex items-center justify-center text-[#7A847E] hover:text-[#2D3A31] hover:bg-white transition-colors"
+                                                                    title="Remove file"
+                                                                    aria-label="Remove file"
+                                                                >
+                                                                    <X className="h-3.5 w-3.5" />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
                                         </div>
-                                        <button
-                                            onClick={handleExportForecastWorkbook}
-                                            className="px-5 py-3 rounded-2xl border border-[#D8D3C8] bg-white/80 text-[#2D3A31] text-sm font-medium inline-flex items-center gap-3 hover:bg-white transition-colors self-start md:self-auto"
-                                        >
-                                            <Download className="h-5 w-5" />
-                                            Export Workbook
-                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -1188,6 +1375,12 @@ function VerificationPartnerRow({ name, detail, tag }: { name: string; detail: s
     );
 }
 
+function formatFileSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function getFallbackFundingPayload(): FundingPathwayPayload {
     return {
         recommended_measures: [
@@ -1295,3 +1488,5 @@ function getFallbackFundingPayload(): FundingPathwayPayload {
         ],
     };
 }
+
+

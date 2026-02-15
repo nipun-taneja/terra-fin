@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React from "react";
 import { AppView } from "@/lib/types";
@@ -22,11 +22,9 @@ const HowItWorksView: React.FC<HowItWorksViewProps> = ({ onNavigate }) => {
                         onClick={() => onNavigate("landing")}
                         className="flex items-center gap-2 cursor-pointer group min-w-0"
                     >
-                        <div className="w-8 h-8 rounded-lg bg-[#2D3A31] flex items-center justify-center text-[#F9F8F4] font-display font-bold text-sm transition-transform group-hover:scale-110 shrink-0">
-                            TF
-                        </div>
+                        <div className="w-8 h-8 rounded-lg bg-[#2D3A31] flex items-center justify-center text-[#F9F8F4] font-display font-bold text-sm transition-transform group-hover:scale-110 shrink-0">FF</div>
                         <span className="font-display font-bold text-xl text-[#2D3A31] tracking-tight truncate">
-                            TerraFin
+                            FarmFin
                         </span>
                     </div>
 
@@ -34,7 +32,7 @@ const HowItWorksView: React.FC<HowItWorksViewProps> = ({ onNavigate }) => {
                         onClick={() => onNavigate("landing")}
                         className="text-[#2D3A31]/60 hover:text-[#2D3A31] text-sm font-medium transition-colors shrink-0"
                     >
-                        ✕ Close
+                        âœ• Close
                     </button>
                 </nav>
             </header>
@@ -61,7 +59,7 @@ const HowItWorksView: React.FC<HowItWorksViewProps> = ({ onNavigate }) => {
                     <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-24 items-stretch min-w-0">
                         <div className="glass-card p-6 bg-white/60 flex flex-col h-full border border-[#E6E2DA] shadow-sm min-w-0">
                             <div className="w-12 h-12 rounded-xl bg-[#8C9A84]/10 flex items-center justify-center text-2xl mb-6 shadow-inner shrink-0">
-                                🌾
+                                ðŸŒ¾
                             </div>
                             <h3 className="text-lg font-display font-bold mb-3 text-[#2D3A31] break-words">
                                 The Ambition
@@ -74,26 +72,26 @@ const HowItWorksView: React.FC<HowItWorksViewProps> = ({ onNavigate }) => {
 
                         <div className="glass-card p-6 bg-white/60 flex flex-col h-full border border-[#E6E2DA] shadow-sm min-w-0">
                             <div className="w-12 h-12 rounded-xl bg-[#2D3A31]/10 flex items-center justify-center text-2xl mb-6 shadow-inner shrink-0">
-                                🤖
+                                ðŸ¤–
                             </div>
                             <h3 className="text-lg font-display font-bold mb-3 text-[#2D3A31] break-words">
                                 The Solution
                             </h3>
                             <p className="text-sm text-[#2D3A31]/70 flex-grow leading-relaxed break-words">
-                                TerraFin acts as a digital agronomist. We pull satellite data to audit a farm&apos;s current
+                                FarmFin acts as a digital agronomist. We pull satellite data to audit a farm&apos;s current
                                 emissions and generate a custom 3-step transition roadmap.
                             </p>
                         </div>
 
                         <div className="glass-card p-6 bg-white/60 flex flex-col h-full border border-[#E6E2DA] shadow-sm sm:col-span-2 lg:col-span-1 min-w-0">
                             <div className="w-12 h-12 rounded-xl bg-[#C27B66]/10 flex items-center justify-center text-2xl mb-6 shadow-inner shrink-0">
-                                💸
+                                ðŸ’¸
                             </div>
                             <h3 className="text-lg font-display font-bold mb-3 text-[#2D3A31] break-words">
                                 The Result
                             </h3>
                             <p className="text-sm text-[#2D3A31]/70 flex-grow leading-relaxed break-words">
-                                We pre-sell projected carbon credits to corporate buyers (Nestlé, Microsoft). This &quot;Voluntary
+                                We pre-sell projected carbon credits to corporate buyers (NestlÃ©, Microsoft). This &quot;Voluntary
                                 Carbon Market&quot; pays for the farmer&apos;s transition.
                             </p>
                         </div>
@@ -123,7 +121,7 @@ const HowItWorksView: React.FC<HowItWorksViewProps> = ({ onNavigate }) => {
                                     </div>
                                 </div>
                                 <div className="md:w-1/2 order-2 hidden md:block min-w-0">
-                                    <div className="text-5xl group-hover:scale-110 transition-transform origin-left">📍</div>
+                                    <div className="text-5xl group-hover:scale-110 transition-transform origin-left">ðŸ“</div>
                                 </div>
                             </div>
 
@@ -137,7 +135,7 @@ const HowItWorksView: React.FC<HowItWorksViewProps> = ({ onNavigate }) => {
                             {/* Step 2 */}
                             <div className="flex flex-col md:flex-row items-center gap-8 group min-w-0">
                                 <div className="md:w-1/2 order-2 md:order-1 flex justify-center md:justify-end hidden md:block min-w-0">
-                                    <div className="text-5xl group-hover:scale-110 transition-transform origin-right">🛰️</div>
+                                    <div className="text-5xl group-hover:scale-110 transition-transform origin-right">ðŸ›°ï¸</div>
                                 </div>
                                 <div className="md:w-1/2 flex justify-center md:justify-start order-1 md:order-2 min-w-0">
                                     <div className="p-8 pb-10 glass-card bg-white/80 border-[#2D3A31] border-2 relative w-full min-w-0">
@@ -175,7 +173,7 @@ const HowItWorksView: React.FC<HowItWorksViewProps> = ({ onNavigate }) => {
                                     </div>
                                 </div>
                                 <div className="md:w-1/2 order-2 hidden md:block min-w-0">
-                                    <div className="text-5xl group-hover:scale-110 transition-transform origin-left">🗺️</div>
+                                    <div className="text-5xl group-hover:scale-110 transition-transform origin-left">ðŸ—ºï¸</div>
                                 </div>
                             </div>
 
@@ -189,7 +187,7 @@ const HowItWorksView: React.FC<HowItWorksViewProps> = ({ onNavigate }) => {
                             {/* Step 4 */}
                             <div className="flex flex-col md:flex-row items-center gap-8 group min-w-0">
                                 <div className="md:w-1/2 order-2 md:order-1 flex justify-center md:justify-end hidden md:block min-w-0">
-                                    <div className="text-5xl group-hover:scale-110 transition-transform origin-right">💸</div>
+                                    <div className="text-5xl group-hover:scale-110 transition-transform origin-right">ðŸ’¸</div>
                                 </div>
                                 <div className="md:w-1/2 flex justify-center md:justify-start order-1 md:order-2 min-w-0">
                                     <div className="p-8 glass-card bg-[#2D3A31] border-white/20 border-2 relative w-full text-white shadow-xl min-w-0">
@@ -215,22 +213,22 @@ const HowItWorksView: React.FC<HowItWorksViewProps> = ({ onNavigate }) => {
                             <ReasonCard
                                 title="Carbon as Second Cash Crop"
                                 text="Don't just sell rice. Sell Verified Carbon Credits directly to companies like Microsoft or Delta."
-                                icon="📈"
+                                icon="ðŸ“ˆ"
                             />
                             <ReasonCard
                                 title="Slash Input Costs"
                                 text="High emissions = wasted resources. Our roadmap reduces fertilizer & fuel use, widening your profit margins."
-                                icon="📉"
+                                icon="ðŸ“‰"
                             />
                             <ReasonCard
                                 title="Supply Chain Survival"
-                                text="Big buyers (Nestlé, Walmart) have 'Net Zero' targets. Use our dashboard to prove compliance."
-                                icon="🔗"
+                                text="Big buyers (NestlÃ©, Walmart) have 'Net Zero' targets. Use our dashboard to prove compliance."
+                                icon="ðŸ”—"
                             />
                             <ReasonCard
                                 title="Cheaper Green Debt"
                                 text="Access subsidized, low-interest micro-loans strictly for sustainable transitions."
-                                icon="🏦"
+                                icon="ðŸ¦"
                             />
                         </div>
                     </section>
@@ -277,3 +275,5 @@ const ReasonCard = ({
 );
 
 export default HowItWorksView;
+
+
