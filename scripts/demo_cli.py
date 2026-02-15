@@ -6,15 +6,15 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from app.pipelines.ingest import (
+from app.pipelines.ingest import (  # noqa: E402
     create_farm,
     add_field,
     add_field_season,
     add_management_event,
 )
-from app.pipelines.enrich import enrich_weather
-from app.pipelines.estimate import run_estimates
-from app.services.storage_csv import read_rows
+from app.pipelines.enrich import enrich_weather  # noqa: E402
+from app.pipelines.estimate import run_estimates  # noqa: E402
+from app.services.storage_csv import read_rows  # noqa: E402
 
 DATA_DIR = ROOT / "data"
 
@@ -73,7 +73,7 @@ def _wipe_data_csvs() -> None:
         _safe_remove(DATA_DIR / name)
 
 
-def _add_simple_events(data_dir: str, season_id: str, scenario: str) -> None:
+def _add_simple_events(data_dir: str, season_id: str, scenario: str, year: int) -> None:
     """
     Ask only for 3 levers (MVP):
       - number of tillage passes
@@ -90,13 +90,13 @@ def _add_simple_events(data_dir: str, season_id: str, scenario: str) -> None:
     fert_unit = _prompt("Fertilizer unit (e.g., lb_N_per_acre)", "lb_N_per_acre")
     irrigation_events = _prompt_int("Irrigation events", 1)
 
-    # Generic dates (fine for demo)
+    # Generic dates (fine for demo) — IMPORTANT: use the chosen year
     for i in range(tillage_passes):
         add_management_event(
             data_dir,
             season_id,
             "tillage",
-            f"2024-03-{1+i:02d}",
+            f"{year}-03-{1+i:02d}",
             notes=f"{scenario} tillage pass {i+1}",
         )
 
@@ -104,7 +104,7 @@ def _add_simple_events(data_dir: str, season_id: str, scenario: str) -> None:
         data_dir,
         season_id,
         "fertilizer",
-        "2024-03-15",
+        f"{year}-03-15",
         amount=fert_amount,
         unit=fert_unit,
         product="urea",
@@ -116,9 +116,92 @@ def _add_simple_events(data_dir: str, season_id: str, scenario: str) -> None:
             data_dir,
             season_id,
             "irrigation",
-            f"2024-06-{1+i:02d}",
+            f"{year}-06-{1+i:02d}",
             notes=f"{scenario} irrigation {i+1}",
         )
+
+
+def _print_offers(agent_out: dict) -> None:
+    """
+    Prints the 'offers' section produced by agent_gemini.py.
+    This is the data that frontend can use for its Offers tab.
+    """
+    offers = agent_out.get("offers", {}) if isinstance(agent_out, dict) else {}
+    ranked = offers.get("ranked_offers", []) if isinstance(offers, dict) else []
+
+    print("\n==============================")
+    print("OFFERS (Banks & Orgs)")
+    print("==============================")
+
+    if not ranked:
+        print(" - No offers available (yet).")
+        return
+
+    disclaimer = (offers.get("disclaimer", "") or "").strip()
+    if disclaimer:
+        print(f"Disclaimer: {disclaimer}")
+
+    for i, o in enumerate(ranked, start=1):
+        print(f"\n{i}) {o.get('provider_name','(provider)')} — {o.get('offer_type','offer')}")
+        best_for = (o.get("best_for") or "").strip()
+        if best_for:
+            print(f"   Best for: {best_for}")
+        print(f"   Match score: {o.get('match_score_0_100',0)} / 100")
+
+        terms = o.get("estimated_terms", {}) or {}
+        adv = terms.get("advance_usd_range", [0, 0])
+        apr = terms.get("apr_range", [0.0, 0.0])
+        tenor = terms.get("tenor_months_range", [0, 0])
+        repay = (terms.get("repayment_source", "") or "").strip()
+
+        meaningful_terms = (
+            (isinstance(adv, list) and len(adv) == 2 and adv != [0, 0])
+            or (isinstance(apr, list) and len(apr) == 2 and apr != [0.0, 0.0])
+            or (isinstance(tenor, list) and len(tenor) == 2 and tenor != [0, 0])
+            or bool(repay)
+        )
+        if meaningful_terms:
+            print("   Estimated terms:")
+            if isinstance(adv, list) and len(adv) == 2:
+                print(f"     - Advance: ${adv[0]} – ${adv[1]}")
+            if isinstance(apr, list) and len(apr) == 2:
+                print(f"     - APR: {apr[0]} – {apr[1]}")
+            if isinstance(tenor, list) and len(tenor) == 2:
+                print(f"     - Tenor (months): {tenor[0]} – {tenor[1]}")
+            if repay:
+                print(f"     - Repayment: {repay}")
+
+        reqs = o.get("requirements", []) or []
+        if reqs:
+            print("   Requirements:")
+            for r in reqs:
+                print(f"     - {r}")
+
+        send = o.get("what_to_send", []) or []
+        if send:
+            print("   What to send:")
+            for s in send:
+                print(f"     - {s}")
+
+        steps = o.get("next_steps", []) or []
+        if steps:
+            print("   Next steps:")
+            for st in steps:
+                print(f"     - {st}")
+
+        risks = o.get("risks_and_notes", []) or []
+        if risks:
+            print("   Risks/notes:")
+            for rn in risks:
+                print(f"     - {rn}")
+
+        links = o.get("links", {}) or {}
+        if isinstance(links, dict) and (links.get("apply_url") or links.get("contact_email")):
+            print("   Links:")
+            if links.get("apply_url"):
+                print(f"     - Apply: {links.get('apply_url')}")
+            if links.get("contact_email"):
+                print(f"     - Contact: {links.get('contact_email')}")
 
 
 def _print_results() -> None:
@@ -130,6 +213,7 @@ def _print_results() -> None:
       - Earnings forecast (net, after platform fee)
       - Per-field breakdown
       - AI agent recommendations (ranked) incl. CAPEX + evidence
+      - OFFERS section (banks/orgs) for frontend Offers tab
     """
     from app.core.score import compute_credit_score
     from app.core.forecast import generate_credit_forecast
@@ -202,14 +286,10 @@ def _print_results() -> None:
 
     # Uncertainty pct derived from bounds (conservative)
     if total_mid > 0:
-        uncertainty_pct = min(
-            0.40,
-            max(0.0, (total_high - total_low) / (2.0 * total_mid)),
-        )
+        uncertainty_pct = min(0.40, max(0.0, (total_high - total_low) / (2.0 * total_mid)))
     else:
         uncertainty_pct = 0.40
 
-    # Simple MVP flags (later: compute these from evidence data)
     additionality_flag = total_mid > 0.25
     verification_ready = True
 
@@ -288,6 +368,56 @@ def _print_results() -> None:
                 "max_upfront_cost_usd": 5000,
                 "no_new_equipment": False,
             },
+            # Option A (recommended): let agent_gemini inject its DEFAULT_OFFER_CATALOG
+            # "offer_catalog": [],
+            #
+            # Option B: provide your custom catalog below (kept as-is from your draft)
+            "offer_catalog": [
+                {
+                    "provider_name": "CoBank",
+                    "provider_category": "bank_lender",
+                    "best_for": "Ag co-ops / larger operators",
+                    "requirements": ["Basic farm financials", "Practice plan / projected cashflow"],
+                    "what_to_send": ["Farm summary", "Field/practice plan", "Input logs (fertilizer/irrigation/tillage)"],
+                    "next_steps": ["Contact and ask about conservation-aligned / sustainability-linked ag credit"],
+                    "advance_usd_range": [5000, 50000],
+                    "apr_range": [6.0, 13.0],
+                    "tenor_months_range": [12, 60],
+                    "repayment_source": "farm_cashflow_or_credit_proceeds",
+                },
+                {
+                    "provider_name": "USDA FSA",
+                    "provider_category": "public_program",
+                    "best_for": "Practice adoption support + farm lending programs",
+                    "requirements": ["Eligibility varies by county/state"],
+                    "what_to_send": ["Farm info", "Practice plan", "Basic financials (if required)"],
+                    "next_steps": ["Visit local USDA Service Center / check FSA program fit"],
+                },
+                {
+                    "provider_name": "Carbon by Indigo",
+                    "provider_category": "carbon_program_marketplace",
+                    "best_for": "Enrollment pathway to generate/verify/sell ag carbon credits",
+                    "requirements": ["Field boundaries", "Practice history", "Documentation for verification"],
+                    "what_to_send": ["Field boundaries", "Practice history", "Input logs"],
+                    "next_steps": ["Check eligibility and enrollment timeline"],
+                },
+                {
+                    "provider_name": "Boomitra",
+                    "provider_category": "carbon_program_marketplace",
+                    "best_for": "Soil carbon projects with MRV support",
+                    "requirements": ["Field boundaries", "Project documentation"],
+                    "what_to_send": ["Field boundaries", "Practice plan"],
+                    "next_steps": ["Request onboarding / eligibility review"],
+                },
+                {
+                    "provider_name": "Wells Fargo",
+                    "provider_category": "bank_lender",
+                    "best_for": "General financing (large bank)",
+                    "requirements": ["Underwriting varies"],
+                    "what_to_send": ["Farm summary", "Basic financials", "Project plan"],
+                    "next_steps": ["Ask for ag / sustainability-linked finance options"],
+                },
+            ],
         }
 
         agent_out = get_recommendations(agent_payload)
@@ -306,6 +436,7 @@ def _print_results() -> None:
             print(f"   Why: {m.get('why_it_helps','')}")
             print(f"   Fields: {', '.join(m.get('field_names', [])) or 'All'}")
             print(f"   CAPEX: ${cap.get('low',0)} – ${cap.get('high',0)}")
+
             if opx:
                 print(f"   OPEX change (annual): ${opx.get('low',0)} – ${opx.get('high',0)}")
             if tl:
@@ -342,6 +473,9 @@ def _print_results() -> None:
             print("\nNotes:")
             for n_ in notes:
                 print(f" - {n_}")
+
+        # ✅ OFFERS
+        _print_offers(agent_out)
 
     except Exception as e:
         print("\n(Agent recommendations unavailable)")
@@ -405,8 +539,8 @@ def main() -> None:
             notes="project",
         )
 
-        _add_simple_events(str(DATA_DIR), baseline_season_id, "baseline")
-        _add_simple_events(str(DATA_DIR), project_season_id, "project")
+        _add_simple_events(str(DATA_DIR), baseline_season_id, "baseline", year)
+        _add_simple_events(str(DATA_DIR), project_season_id, "project", year)
 
     print("\n--- Enriching weather (Open-Meteo) ---")
     start_date = _prompt("Weather start date (YYYY-MM-DD)", f"{year}-03-01")
