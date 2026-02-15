@@ -185,8 +185,6 @@ export default function DashboardView({ farm, fields, onFieldsChange, onBack, fu
         );
     }
 
-    const completedSteps = activeField.steps.filter((s) => s.completed).length;
-    const completionPct = activeField.steps.length > 0 ? (completedSteps / activeField.steps.length) * 100 : 0;
     const fundingPayload = fundingData ?? getFallbackFundingPayload();
     const lowRiskMeasures = fundingPayload.recommended_measures.filter((m) => m.risk_level === "low").length;
     const topOffer = [...fundingPayload.offers.ranked_offers].sort(
@@ -316,27 +314,6 @@ export default function DashboardView({ farm, fields, onFieldsChange, onBack, fu
 
                 <div id="dashboard-steps" className="glass-card card-lift overflow-hidden">
                     <div className="px-6 pt-6 pb-5 border-b border-[#E6E2DA]">
-                        {activeDrawerTab === "overview" && (
-                            <>
-                                <div className="flex items-center justify-between gap-3">
-                                    <div className="text-sm text-muted">Progress Overview</div>
-                                    <div className="text-xs text-muted">
-                                        {completedSteps}/{activeField.steps.length} actions complete
-                                    </div>
-                                </div>
-                                <div className="mt-3 h-2.5 rounded-full bg-[#EFEAE1] overflow-hidden">
-                                    <div
-                                        className="h-full rounded-full"
-                                        style={{
-                                            width: `${completionPct}%`,
-                                            background: "linear-gradient(90deg, #8C9A84 0%, #C27B66 100%)",
-                                            transition: "width 500ms ease-out",
-                                        }}
-                                    />
-                                </div>
-                            </>
-                        )}
-
                         {activeDrawerTab === "verification" && (
                             <div className="rounded-2xl border border-[#E6E2DA] bg-[#F8F6F0] p-6">
                                 <h3 className="font-display text-2xl md:text-3xl font-semibold text-[#2D3A31] mb-2">
@@ -638,7 +615,6 @@ export default function DashboardView({ farm, fields, onFieldsChange, onBack, fu
                                                             <span className="text-xs font-semibold tracking-[0.12em] uppercase text-muted">Expected Impact:</span>
                                                             <span className="text-xs text-[#6F7D73] bg-[#8C9A84]/12 px-2 py-0.5 rounded-full font-medium border border-[#8C9A84]/35">{step.expectedImpact}</span>
                                                         </div>
-                                                        <div className="text-xs text-muted italic">Evidence upload (coming soon)</div>
                                                     </div>
                                                 )}
                                             </div>

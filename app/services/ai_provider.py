@@ -372,9 +372,9 @@ def generate_maize_roadmap(
     prompt = _build_prompt(lat, lon, farm_size_hectares, satellite, baseline_tco2e_y)
     primary = _primary_backend()
     secondary = _fallback_backend()
-    ordered = [b for b in [primary, secondary] if b in {"openai", "ollama", "gemini"}]
+    ordered = [b for b in [primary, secondary] if b in {"openai", "gemini"}]
     if not ordered:
-        ordered = ["gemini"]
+        ordered = ["openai"]
 
     last_error_type = ""
     last_error = ""
