@@ -17,7 +17,10 @@ export async function verifyCRS(req: CRSRequest): Promise<CRSResponse> {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(req),
     });
-    if (!res.ok) throw new Error(`CRS check failed: ${res.status}`);
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `CRS check failed: ${res.status}`);
+    }
     return res.json();
 }
 

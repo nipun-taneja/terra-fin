@@ -123,4 +123,72 @@ export interface DashboardField {
     creditBalance: number;
 }
 
+export interface NumericRange {
+    low: number;
+    high: number;
+}
+
+export interface TimelineRange {
+    min: number;
+    max: number;
+}
+
+export interface FundingMeasure {
+    title: string;
+    why_it_helps: string;
+    field_names: string[];
+    implementation_steps: string[];
+    capital_required_usd: NumericRange;
+    annual_opex_change_usd: NumericRange;
+    timeline_months: TimelineRange;
+    expected_credit_uplift_tco2e_per_year: NumericRange;
+    verification_evidence: string[];
+    risk_level: "low" | "medium" | "high";
+    notes?: string[];
+}
+
+export interface FundingOffer {
+    provider_name: string;
+    provider_category:
+    | "bank_lender"
+    | "lender"
+    | "credit_union"
+    | "carbon_program_marketplace"
+    | "carbon_registry"
+    | "public_program"
+    | "credit_data_api"
+    | "other";
+    offer_type: string;
+    best_for?: string;
+    match_score_0_100: number;
+    why_ranked: string[];
+    estimated_terms: {
+        advance_usd_range: [number, number];
+        apr_range: [number, number];
+        tenor_months_range: [number, number];
+        repayment_source: string;
+    };
+    requirements: string[];
+    what_to_send: string[];
+    next_steps: string[];
+    risks_and_notes: string[];
+    links?: {
+        apply_url?: string;
+        contact_email?: string;
+    };
+}
+
+export interface FundingOffersPayload {
+    disclaimer: string;
+    ranked_offers: FundingOffer[];
+}
+
+export interface FundingPathwayPayload {
+    recommended_measures: FundingMeasure[];
+    what_to_do_next: string[];
+    appraiser_evidence_checklist: string[];
+    offers: FundingOffersPayload;
+    notes: string[];
+}
+
 export type AppView = "landing" | "login" | "register" | "onboarding" | "dashboard" | "how-it-works";

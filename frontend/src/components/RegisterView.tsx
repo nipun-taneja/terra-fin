@@ -173,7 +173,9 @@ export default function RegisterView({ onVerified }: Props) {
             } else {
                 setState("error");
             }
-        } catch {
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : "Unable to verify identity at this time.";
+            setCrsResult({ credible: false, score: 0, flags: [msg] });
             setState("error");
         }
     };
