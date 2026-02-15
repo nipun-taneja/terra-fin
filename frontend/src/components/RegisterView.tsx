@@ -176,6 +176,12 @@ export default function RegisterView({ onVerified }: Props) {
                 window.localStorage.setItem("crs_first_name", form.firstName.trim());
                 window.localStorage.setItem("crs_last_name", form.lastName.trim());
                 window.localStorage.setItem("crs_address", form.address.trim());
+                const verificationScorePct = Math.max(0, Math.min(100, Math.round((res.score ?? 0) * 100)));
+                window.localStorage.setItem("crs_verification_score", String(verificationScorePct));
+                const bureauScore = findBureauScoreFromReport(res.report);
+                if (bureauScore !== null) {
+                    window.localStorage.setItem("crs_bureau_score", String(Math.round(bureauScore)));
+                }
             } catch {
                 // Ignore storage issues; UI can continue without persisted CRS cache.
             }
@@ -320,12 +326,6 @@ export default function RegisterView({ onVerified }: Props) {
                                 </div>
                             </div>
 
-                            <button
-                                onClick={() => setShowImproveModal(true)}
-                                className="w-full py-3 soft-pill rounded-full text-sm font-semibold text-[#2D3A31] hover:bg-[#DCCFC2]/55 transition-colors"
-                            >
-                                Want to improve your score?
-                            </button>
                             <div className="flex gap-2">
                                 <button
                                     onClick={() => setState("idle")}
