@@ -124,36 +124,26 @@ def analyze_farm_full(req: FarmAnalyzeRequest) -> FullAnalysisResponse:
 
 
 # ------------------------------------------------------------------
-# MongoDB retrieval endpoints
+# Analysis retrieval endpoints (storage backend via facade)
 # ------------------------------------------------------------------
-from typing import List as TList
-
-try:
-    from app.services.storage_mongo import (  # type: ignore[import]
-        list_analyses as _list_analyses,
-        get_analysis as _get_analysis,
-    )
-    _MONGO_AVAILABLE = True
-except Exception:
-    _MONGO_AVAILABLE = False
+from app.services.storage import (  # type: ignore[import]
+    list_analyses as _list_analyses,
+    get_analysis as _get_analysis,
+)
 
 
 @router.get("/api/analyses")
 def list_analyses(limit: int = 50):
-    """List recent analyses stored in MongoDB (most recent first)."""
-    if not _MONGO_AVAILABLE:
-        raise HTTPException(status_code=503, detail="MongoDB is not configured.")
+    """List recent analyses (most recent first)."""
     try:
         return _list_analyses(limit=limit)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"MongoDB error: {e}")
+        raise HTTPException(status_code=500, detail=f"Storage error: {e}")
 
 
 @router.get("/api/analyses/{analysis_id}")
 def get_analysis(analysis_id: str):
     """Retrieve a specific past analysis by its ID."""
-    if not _MONGO_AVAILABLE:
-        raise HTTPException(status_code=503, detail="MongoDB is not configured.")
     try:
         doc = _get_analysis(analysis_id)
         if doc is None:
@@ -162,4 +152,4 @@ def get_analysis(analysis_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"MongoDB error: {e}")
+        raise HTTPException(status_code=500, detail=f"Storage error: {e}")

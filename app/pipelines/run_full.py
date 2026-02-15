@@ -44,11 +44,11 @@ from typing import Any, cast
 
 # MongoDB persistence (graceful — works even if MONGODB_URI is not set)
 try:
-    from ..services import storage_mongo  # type: ignore[import]
-    _mongo_save = cast(Any, storage_mongo.save_analysis)
-    _mongo_save_farm = cast(Any, storage_mongo.save_farm)
-    _mongo_save_field = cast(Any, storage_mongo.save_field)
-    _mongo_save_events = cast(Any, storage_mongo.save_events)
+    from ..services import storage  # type: ignore[import]
+    _mongo_save = cast(Any, storage.save_analysis)
+    _mongo_save_farm = cast(Any, storage.save_farm)
+    _mongo_save_field = cast(Any, storage.save_field)
+    _mongo_save_events = cast(Any, storage.save_events)
     _mongo_available = True
 except Exception:
     _mongo_save = cast(Any, lambda *a, **k: "failed")

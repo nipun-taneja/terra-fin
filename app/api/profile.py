@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException  # type: ignore[import]
 from pydantic import BaseModel  # type: ignore[import]
 from typing import Optional, List, Dict, Any
-from ..services.storage_mongo import (  # type: ignore[import]
+from ..services.storage import (  # type: ignore[import]
     get_farm_by_email, 
     get_latest_analysis_for_user,
     get_fields_by_farm,

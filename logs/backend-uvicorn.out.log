@@ -1,0 +1,6 @@
+INFO:     127.0.0.1:55834 - "OPTIONS /api/credibility/check HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55834 - "POST /api/credibility/check HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56234 - "OPTIONS /api/analyze HTTP/1.1" 200 OK
+DEBUG: analyze endpoint hit for lat=41.814841, lon=-90.551515
+INFO:     127.0.0.1:49979 - "POST /api/analyze HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49979 - "POST /api/analyze HTTP/1.1" 422 Unprocessable Content

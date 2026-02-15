@@ -848,7 +848,7 @@ function getFallbackFundingPayload(): FundingPathwayPayload {
             {
                 title: "Split nitrogen applications + 4R nutrient management",
                 why_it_helps: "Reduces N2O emissions by improving timing and avoiding excess nitrogen.",
-                field_names: ["Meth", "Fent"],
+                field_names: ["Maize", "Rice"],
                 implementation_steps: [
                     "Split N into 2-3 applications by crop stage",
                     "Use soil/tissue tests where feasible",

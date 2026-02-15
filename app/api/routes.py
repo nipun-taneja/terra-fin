@@ -9,7 +9,7 @@ from ..services.baseline import estimate_maize_baseline_tco2e_y  # type: ignore[
 from ..services.ai_provider import generate_maize_roadmap, aggregate_reduction_pct_range  # type: ignore[import]
 from ..services.finance import compute_annual_savings_tco2e, compute_finance_offer  # type: ignore[import]
 import logging
-from ..services.storage_mongo import save_analysis, get_db  # type: ignore[import]
+from ..services.storage import save_analysis, update_analysis_result  # type: ignore[import]
 from ..services.eng1_loader import load_eng1_analysis  # type: ignore[import]
 
 logger = logging.getLogger(__name__)
@@ -168,13 +168,9 @@ def analyze(req: AnalyzeRequest) -> AnalyzeResponse:
 
     if analysis_id:
         try:
-            db = get_db()
-            db.analyses.update_one(
-                {"analysis_id": analysis_id},
-                {"$set": {"result": res.model_dump()}}
-            )
+            update_analysis_result(analysis_id=analysis_id, result=res.model_dump())
         except Exception:
-            # Silence internal DB errors if needed, or use a local logger
+            # Best-effort persistence update.
             pass
 
     return res
