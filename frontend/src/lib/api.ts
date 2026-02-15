@@ -4,8 +4,11 @@ import {
     AnalyzeRequest,
     AnalyzeResponse,
     FieldConfig,
+    FarmConfig,
     StepItem,
     TimelinePoint,
+    ProfileResponse,
+    DashboardField,
 } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -69,6 +72,29 @@ export async function analyzeField(field: FieldConfig): Promise<AnalyzeResponse>
     }
 }
 
+// ─── User Profile / Persistence ──────────────────────────────
+export async function loadProfile(email: string): Promise<ProfileResponse> {
+    const res = await fetch(`${API_BASE}/api/profile/load?email=${encodeURIComponent(email)}`);
+    if (!res.ok) throw new Error(`Failed to load profile: ${res.status}`);
+    return res.json();
+}
+
+export async function saveProfileLink(email: string, analysisId: string): Promise<void> {
+    const res = await fetch(`${API_BASE}/api/profile/save?email=${encodeURIComponent(email)}&analysis_id=${encodeURIComponent(analysisId)}`, {
+        method: "POST"
+    });
+    if (!res.ok) throw new Error(`Failed to save profile link: ${res.status}`);
+}
+
+export async function saveFarm(email: string, farm: FarmConfig, fields: FieldConfig[]): Promise<void> {
+    const res = await fetch(`${API_BASE}/api/profile/save-farm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, farm, fields }),
+    });
+    if (!res.ok) throw new Error(`Failed to save farm: ${res.status}`);
+}
+
 // ─── Helpers ─────────────────────────────────────────────────
 function delay(ms: number) {
     return new Promise((r) => setTimeout(r, ms));
@@ -99,6 +125,22 @@ export function buildTimeline(baseline: number): TimelinePoint[] {
     return points;
 }
 
+export function buildDashboardFields(
+    fields: FieldConfig[],
+    analysis: AnalyzeResponse | null
+): DashboardField[] {
+    if (!analysis) return [];
+    const creditAvg = (analysis.finance.credit_value_usd_y[0] + analysis.finance.credit_value_usd_y[1]) / 2;
+    return fields.map((f) => ({
+        fieldName: f.field_name,
+        config: f,
+        analysis,
+        steps: buildStepsFromRoadmap(analysis.roadmap),
+        timeline: buildTimeline(analysis.audit.baseline_tco2e_y),
+        creditBalance: Math.round(creditAvg),
+    }));
+}
+
 // ─── Mock for offline dev ────────────────────────────────────
 function mockAnalyzeResponse(field: FieldConfig): AnalyzeResponse {
     const ha =
@@ -107,6 +149,7 @@ function mockAnalyzeResponse(field: FieldConfig): AnalyzeResponse {
             : field.area_value;
     const baseline = Math.round(ha * 2.5 * 100) / 100;
     return {
+        analysis_id: `mock-ana-${Date.now()}`,
         location: { lat: field.latitude, lon: field.longitude },
         crop_type: "maize",
         satellite: { ndvi_mean: 0.62, ndvi_trend: 0.03, cropland_confidence: 0.88 },

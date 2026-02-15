@@ -5,13 +5,13 @@ import json
 import os
 import re
 import time
-from typing import Any, Optional, List
 from pathlib import Path
+from typing import Any, Optional, List, Dict
 
-import requests
-from fastapi import APIRouter, HTTPException, Response
-from pydantic import BaseModel, Field
-from dotenv import load_dotenv
+import requests  # type: ignore[import]
+from fastapi import APIRouter, HTTPException, Response  # type: ignore[import]
+from pydantic import BaseModel, Field  # type: ignore[import]
+from dotenv import load_dotenv  # type: ignore[import]
 
 router = APIRouter()
 load_dotenv()
@@ -36,7 +36,7 @@ class CredibilityResponse(BaseModel):
     score: float  # 0..1
     flags: List[str]
     request_id: Optional[str] = None
-    report: Optional[dict[str, Any]] = None
+    report: Optional[Dict[str, Any]] = None
 
 
 class CredibilityPdfRequest(BaseModel):

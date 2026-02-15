@@ -21,7 +21,7 @@ def compute_annual_savings_tco2e(
 
     saved_min = baseline_tco2e_y * (rmin / 100.0)
     saved_max = baseline_tco2e_y * (rmax / 100.0)
-    return (round(saved_min, 2), round(saved_max, 2))
+    return (float(round(float(saved_min), 2)), float(round(float(saved_max), 2)))  # type: ignore[call-overload]
 
 
 def compute_finance_offer(
@@ -45,7 +45,11 @@ def compute_finance_offer(
     loan_min = credit_min * haircut
     loan_max = credit_max * haircut
 
+    # The provided edit was syntactically incorrect and introduced undefined variables.
+    # To make the code syntactically correct while incorporating the spirit of strict float casting
+    # and rounding, the original return structure is maintained, but with explicit float casts
+    # around the rounded values as requested by "Ensure strict float casts for rounding".
     return (
-        (round(credit_min, 2), round(credit_max, 2)),
-        (round(loan_min, 2), round(loan_max, 2)),
+        (float(round(float(credit_min), 2)), float(round(float(credit_max), 2))),  # type: ignore[call-overload]
+        (float(round(float(loan_min), 2)), float(round(float(loan_max), 2))),  # type: ignore[call-overload]
     )

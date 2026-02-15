@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Dict, List, Literal, Optional, Tuple
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field  # type: ignore[import]
 
 
 # =============================================================================
@@ -54,6 +54,7 @@ class FinanceOffer(BaseModel):
 
 
 class AnalyzeResponse(BaseModel):
+    analysis_id: Optional[str] = None
     location: Dict[str, float]
     crop_type: Literal["maize"]
     satellite: SatelliteSummary

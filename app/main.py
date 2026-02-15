@@ -1,13 +1,14 @@
 """
 Main FastAPI application entry point for Terra30 Backend.
 """
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI  # type: ignore[import]
+from fastapi.middleware.cors import CORSMiddleware  # type: ignore[import]
 
-from app.api.routes import router
-from app.api.credibility import router as credibility_router
-from app.api.farm_analysis import router as farm_analysis_router
-from app.api.steps import router as steps_router
+from app.api.routes import router  # type: ignore[import]
+from app.api.credibility import router as credibility_router  # type: ignore[import]
+from app.api.farm_analysis import router as farm_analysis_router  # type: ignore[import]
+from app.api.steps import router as steps_router  # type: ignore[import]
+from app.api.profile import router as profile_router  # type: ignore[import]
 
 
 app = FastAPI(title="Terra30 Backend (Maize-only)", version="0.1.0")
@@ -25,16 +26,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Individual API routers
 app.include_router(router)
-
-
-@app.get("/health")
-def health():
-    """Health check endpoint."""
-    return {"status": "ok"}
-
-
+app.include_router(profile_router)
 app.include_router(credibility_router)
 app.include_router(farm_analysis_router)
 app.include_router(steps_router)
 
+
+@app.get("/health")
+def health():
+    """Health check endpoint with MongoDB status."""
+    mongo_ok = False
+    try:
+        from app.services.database import ping  # type: ignore[import]
+        mongo_ok = ping()
+    except Exception:
+        pass
+    return {"status": "ok", "mongodb": "connected" if mongo_ok else "not_connected"}

@@ -7,7 +7,14 @@ from typing import Dict, Tuple
 import hashlib
 from dataclasses import dataclass
 
-from app.models.schemas import SatelliteSummary
+from ..models.schemas import SatelliteSummary  # type: ignore[import]
+
+
+def _new_sat_id() -> str:
+    from uuid import uuid4
+    hex_str: str = str(uuid4().hex)
+    sid_suffix: str = hex_str[:8]  # type: ignore[index]
+    return f"sat_{sid_suffix}"
 
 
 def _seed_from_latlon(lat: float, lon: float) -> int:
@@ -17,7 +24,7 @@ def _seed_from_latlon(lat: float, lon: float) -> int:
     """
     key = f"{lat:.5f},{lon:.5f}".encode("utf-8")
     digest = hashlib.sha256(key).hexdigest()
-    return int(digest[:8], 16)
+    return int(digest[:8], 16)  # type: ignore[index]
 
 
 def _rand01(seed: int) -> float:
@@ -48,7 +55,7 @@ def get_satellite_summary(lat: float, lon: float) -> SatelliteSummary:
     cropland_confidence = 0.55 + 0.45 * r3        # 0.55..1.0
 
     return SatelliteSummary(
-        ndvi_mean=round(ndvi_mean, 3),
-        ndvi_trend=round(ndvi_trend, 3),
-        cropland_confidence=round(cropland_confidence, 3),
+        ndvi_mean=float(round(float(ndvi_mean), 3)),  # type: ignore[call-overload]
+        ndvi_trend=float(round(float(ndvi_trend), 3)),  # type: ignore[call-overload]
+        cropland_confidence=float(round(float(cropland_confidence), 3)),  # type: ignore[call-overload]
     )

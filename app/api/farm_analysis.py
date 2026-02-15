@@ -1,19 +1,21 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
-from app.services.eng1_loader import load_eng1_analysis
-from app.models.farm_analysis_schemas import FarmEcho
+from fastapi import APIRouter, HTTPException  # type: ignore[import]
+from ..services.eng1_loader import load_eng1_analysis  # type: ignore[import]
+from ..models.farm_analysis_schemas import FarmEcho  # type: ignore[import]
 
 
-from app.models.farm_analysis_schemas import (
+from ..models.farm_analysis_schemas import (  # type: ignore[import]
     FarmAnalyzeRequest,
     FarmAnalyzeResponse,
     FieldReduction,
     OutputWindow,
+    FullAnalysisResponse,
 )
+from ..pipelines.run_full import run_full_pipeline  # type: ignore[import]
 
 # MVP MODE:
-# We’ll return a deterministic “mock estimator” response that matches Eng-1 output.
+# We'll return a deterministic "mock estimator" response that matches Eng-1 output.
 # Later, swap `run_estimator(req)` with:
 # - CSV writing
 # - calling Eng-1 estimator code
@@ -50,11 +52,11 @@ def run_estimator(req: FarmAnalyzeRequest) -> FarmAnalyzeResponse:
         else:
             area_scale = f.area_value
 
-        reduction = (till_red + fert_red + irr_red) * (area_scale / 50.0)
-        reduction = round(float(reduction), 2)
+        reduction_raw = (till_red + fert_red + irr_red) * area_scale
+        reduction = float(round(float(reduction_raw), 2))  # type: ignore[call-overload]
 
-        low = round(reduction * 0.84, 2)
-        high = round(reduction * 1.16, 2)
+        low = float(round(float(reduction * 0.84), 2))  # type: ignore[call-overload]
+        high = float(round(float(reduction * 1.16), 2))  # type: ignore[call-overload]
 
         field_out.append(
             FieldReduction(
@@ -66,15 +68,15 @@ def run_estimator(req: FarmAnalyzeRequest) -> FarmAnalyzeResponse:
         )
         total += reduction
 
-    return FarmAnalyzeResponse(
-        farm=FarmEcho(farm_name=req.farm.farm_name, state=req.farm.state),
-        analysis_window=OutputWindow(
+    return FarmAnalyzeResponse(**{
+        "farm": FarmEcho(farm_name=req.farm.farm_name, state=req.farm.state),
+        "analysis_window": OutputWindow(
             start_date=req.analysis_window.start_date,
             end_date=req.analysis_window.end_date,
         ),
-        total_reduction_tco2e=round(float(total), 2),
-        fields=field_out,
-    )
+        "total_reduction_tco2e": float(round(float(total), 2)),  # type: ignore[call-overload]
+        "fields": field_out,
+    })
 
 
 
@@ -104,3 +106,60 @@ def analyze_farm(req: FarmAnalyzeRequest) -> FarmAnalyzeResponse:
     # Otherwise fallback to MVP estimator
     return run_estimator(req)
 
+
+@router.post("/api/farms/analyze/full", response_model=FullAnalysisResponse)
+def analyze_farm_full(req: FarmAnalyzeRequest) -> FullAnalysisResponse:
+    """
+    Full pipeline endpoint:
+    Runs ingest → estimate → score → forecast → earnings → recommendations.
+    Returns rich response with credit score, forecasts, earnings, and AI recommendations.
+    """
+    if len(req.fields) > 4:
+        raise HTTPException(status_code=400, detail="Maximum 4 fields allowed for MVP.")
+
+    try:
+        return run_full_pipeline(req)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Pipeline error: {e}")
+
+
+# ------------------------------------------------------------------
+# MongoDB retrieval endpoints
+# ------------------------------------------------------------------
+from typing import List as TList
+
+try:
+    from app.services.storage_mongo import (  # type: ignore[import]
+        list_analyses as _list_analyses,
+        get_analysis as _get_analysis,
+    )
+    _MONGO_AVAILABLE = True
+except Exception:
+    _MONGO_AVAILABLE = False
+
+
+@router.get("/api/analyses")
+def list_analyses(limit: int = 50):
+    """List recent analyses stored in MongoDB (most recent first)."""
+    if not _MONGO_AVAILABLE:
+        raise HTTPException(status_code=503, detail="MongoDB is not configured.")
+    try:
+        return _list_analyses(limit=limit)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"MongoDB error: {e}")
+
+
+@router.get("/api/analyses/{analysis_id}")
+def get_analysis(analysis_id: str):
+    """Retrieve a specific past analysis by its ID."""
+    if not _MONGO_AVAILABLE:
+        raise HTTPException(status_code=503, detail="MongoDB is not configured.")
+    try:
+        doc = _get_analysis(analysis_id)
+        if doc is None:
+            raise HTTPException(status_code=404, detail=f"Analysis '{analysis_id}' not found.")
+        return doc
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"MongoDB error: {e}")
