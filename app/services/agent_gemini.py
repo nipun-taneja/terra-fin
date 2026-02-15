@@ -43,14 +43,16 @@ AGENT_OUTPUT_SCHEMA_EXAMPLE: Dict[str, Any] = {
 
 def _build_prompt(payload: Dict[str, Any]) -> str:
     return (
-        "You are an agricultural carbon advisor agent for US farms (corn/rice). "
-        "Return ONLY valid JSON. No markdown, no extra text.\n\n"
+        "You are an agricultural carbon advisor expert for US farms. You will be give field level data"
+        "Return ONLY valid JSON. No markdown, no extra text.\n"
         "Task:\n"
-        "You are give input JSON which has field level details. For each field:"
-        "1) Recommend measures to improve carbon credit score and increase credits.\n"
+        "You are give input JSON which has field level details. For each field: \n"
+        "1) Deeply analyse its metadata\n"
+        "1) Recommend unique measures to improve carbon credit score and increase credits based on established research\n"
         "2) Include anticipated capital required (CAPEX) as a low/high USD range.\n"
         "3) Include what to do next.\n"
         "4) Include appraiser evidence checklist.\n\n"
+        "5) Dont provide generic solutions. Act as an expert.\n\n"
         "Rules:\n"
         "- Be conservative. Use ranges. If data is missing, note assumptions.\n"
         "- Respect constraints.max_upfront_cost_usd and constraints.no_new_equipment if provided.\n"
