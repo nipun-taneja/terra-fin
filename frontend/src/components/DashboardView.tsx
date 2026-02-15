@@ -25,6 +25,12 @@ import {
     ResponsiveContainer,
 } from "recharts";
 import { DashboardField, FarmConfig, FundingPathwayPayload } from "@/lib/types";
+import {
+    downloadCRSPdf,
+    downloadCRSCriminalReport,
+    downloadCRSFlexIdPdf,
+    downloadCRSFraudFinderPdf,
+} from "@/lib/api";
 
 interface Props {
     farm: FarmConfig;
@@ -40,6 +46,10 @@ export default function DashboardView({ farm, fields, onFieldsChange, onBack, fu
     const [expandedStep, setExpandedStep] = useState<string | null>(null);
     const [toast, setToast] = useState<{ msg: string; undoIdx: number; stepId: string } | null>(null);
     const [toastTimeout, setToastTimeout] = useState<NodeJS.Timeout | null>(null);
+    const [downloadingCrsPdf, setDownloadingCrsPdf] = useState(false);
+    const [downloadingCriminalReport, setDownloadingCriminalReport] = useState(false);
+    const [downloadingFlexIdPdf, setDownloadingFlexIdPdf] = useState(false);
+    const [downloadingFraudPdf, setDownloadingFraudPdf] = useState(false);
 
     const activeField = fields[activeTab];
 
@@ -103,74 +113,340 @@ export default function DashboardView({ farm, fields, onFieldsChange, onBack, fu
         if (toastTimeout) clearTimeout(toastTimeout);
     };
 
-    const handleDownloadJson = () => {
-        const payload = {
-            farm,
-            generated_at: new Date().toISOString(),
-            total_baseline_tco2e: totalBaseline,
-            total_credits_usd: totalCredits,
-            fields,
-        };
-        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const downloadBlob = (content: BlobPart, mimeType: string, filename: string) => {
+        const blob = new Blob([content], { type: mimeType });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `dashboard-report-${new Date().toISOString().slice(0, 10)}.json`;
+        a.download = filename;
         document.body.appendChild(a);
         a.click();
         a.remove();
         URL.revokeObjectURL(url);
     };
 
-    const handleDownloadCsv = () => {
-        const header = [
-            "field_name",
-            "baseline_tco2e_y",
-            "savings_low_tco2e",
-            "savings_high_tco2e",
-            "ndvi",
-            "confidence_pct",
-            "credit_balance_usd",
-        ];
+    const getCrsSnapshot = () => {
+        const fallback = {
+            source: "demo_placeholder",
+            note: "CRS payload not available in dashboard session. Using dummy data.",
+            request_id: "DEMO-CRS-REQUEST-ID",
+            first_name: "Demo",
+            last_name: "User",
+            address: "123 Demo St, Folsom, CA 95630",
+            bureau: "Experian",
+            score: 742,
+            status: "identity_verified",
+        };
+        if (typeof window === "undefined") return fallback;
+        try {
+            const persistedRequestId = window.localStorage.getItem("crs_request_id");
+            const persistedFirstName = window.localStorage.getItem("crs_first_name");
+            const persistedLastName = window.localStorage.getItem("crs_last_name");
+            const persistedAddress = window.localStorage.getItem("crs_address");
+            if (persistedRequestId) {
+                return {
+                    source: "onboarding_persisted_minimal",
+                    note: "Using persisted CRS onboarding fields (request_id, first_name, last_name, address).",
+                    request_id: persistedRequestId,
+                    first_name: persistedFirstName || fallback.first_name,
+                    last_name: persistedLastName || fallback.last_name,
+                    address: persistedAddress || fallback.address,
+                    bureau: "Experian",
+                    score: fallback.score,
+                    status: "identity_verified",
+                };
+            }
+
+            const raw = window.localStorage.getItem("crs_result");
+            if (!raw) return fallback;
+            const parsed = JSON.parse(raw) as { request_id?: string; score?: number; report?: Record<string, unknown> };
+            return {
+                source: "session_cache",
+                note: "Loaded from local storage cache.",
+                request_id: parsed.request_id ?? fallback.request_id,
+                first_name: fallback.first_name,
+                last_name: fallback.last_name,
+                address: fallback.address,
+                bureau: "Experian",
+                score: parsed.score ?? fallback.score,
+                status: "identity_verified",
+                report: parsed.report ?? null,
+            };
+        } catch {
+            return fallback;
+        }
+    };
+
+    const handleExportFullPortfolio = () => {
+        const payload = {
+            generated_at: new Date().toISOString(),
+            export_type: "full_portfolio_pdf",
+            note: "PDF renderer not integrated yet. JSON payload included for demo.",
+            farm,
+            totals: {
+                baseline_tco2e_y: totalBaseline,
+                estimated_credit_balance_usd: totalCredits,
+            },
+            fields,
+            funding: fundingData ?? getFallbackFundingPayload(),
+        };
+        downloadBlob(JSON.stringify(payload, null, 2), "application/json", `full-portfolio-report-${new Date().toISOString().slice(0, 10)}.json`);
+    };
+
+    const handleExportLenderPacket = () => {
+        const crs = getCrsSnapshot();
+        const payload = {
+            generated_at: new Date().toISOString(),
+            export_type: "lender_packet_pdf",
+            note: "PDF renderer not integrated yet. JSON payload included for demo.",
+            farm,
+            crs_summary: crs,
+            finance_projection: {
+                estimated_credit_balance_usd: totalCredits,
+                baseline_tco2e_y: totalBaseline,
+                top_offer: (fundingData ?? getFallbackFundingPayload()).offers.ranked_offers[0] ?? null,
+            },
+        };
+        downloadBlob(JSON.stringify(payload, null, 2), "application/json", `lender-packet-${new Date().toISOString().slice(0, 10)}.json`);
+    };
+
+    const handleDownloadCreditBureauPdf = async () => {
+        const crs = getCrsSnapshot() as {
+            request_id?: string;
+            report?: Record<string, unknown>;
+            first_name?: string;
+            last_name?: string;
+            address?: string;
+            source?: string;
+        };
+        const requestData = (crs.report && typeof crs.report === "object" ? (crs.report as Record<string, unknown>).requestData : null) as
+            | Record<string, unknown>
+            | null;
+
+        if (!crs.request_id) {
+            window.alert("CRS PDF unavailable: onboarding request ID is missing.");
+            return;
+        }
+
+        try {
+            setDownloadingCrsPdf(true);
+            const blob = await downloadCRSPdf(
+                crs.request_id,
+                requestData ?? {},
+                crs.first_name,
+                crs.last_name,
+                crs.address
+            );
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `crs-credit-report-${crs.request_id}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        } catch {
+            window.alert("Unable to download CRS credit bureau PDF right now.");
+        } finally {
+            setDownloadingCrsPdf(false);
+        }
+    };
+
+    const handleDownloadCriminalReport = async () => {
+        const crs = getCrsSnapshot() as {
+            request_id?: string;
+            report?: Record<string, unknown>;
+            first_name?: string;
+            last_name?: string;
+            address?: string;
+        };
+        const requestData = (crs.report && typeof crs.report === "object" ? (crs.report as Record<string, unknown>).requestData : null) as
+            | Record<string, unknown>
+            | null;
+
+        if (!crs.first_name || !crs.last_name || !crs.address) {
+            window.alert("Criminal report unavailable: persisted first name, last name, or address is missing.");
+            return;
+        }
+
+        try {
+            setDownloadingCriminalReport(true);
+            const blob = await downloadCRSCriminalReport(
+                crs.request_id,
+                requestData ?? {},
+                crs.first_name,
+                crs.last_name,
+                crs.address
+            );
+            const ext = blob.type.includes("pdf") ? "pdf" : blob.type.includes("json") ? "json" : "bin";
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `crs-criminal-report-${crs.request_id || "latest"}.${ext}`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        } catch {
+            window.alert("Unable to download CRS criminal report right now.");
+        } finally {
+            setDownloadingCriminalReport(false);
+        }
+    };
+
+    const handleDownloadFlexIdPdf = async () => {
+        const crs = getCrsSnapshot() as {
+            request_id?: string;
+            report?: Record<string, unknown>;
+            first_name?: string;
+            last_name?: string;
+            address?: string;
+        };
+        const requestData = (crs.report && typeof crs.report === "object" ? (crs.report as Record<string, unknown>).requestData : null) as
+            | Record<string, unknown>
+            | null;
+
+        if (!crs.first_name || !crs.last_name || !crs.address) {
+            window.alert("FlexID PDF unavailable: persisted first name, last name, or address is missing.");
+            return;
+        }
+
+        try {
+            setDownloadingFlexIdPdf(true);
+            const blob = await downloadCRSFlexIdPdf(
+                crs.request_id,
+                requestData ?? {},
+                crs.first_name,
+                crs.last_name,
+                crs.address
+            );
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `crs-flex-id-report-${crs.request_id || "latest"}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        } catch {
+            window.alert("Unable to download CRS FlexID PDF right now.");
+        } finally {
+            setDownloadingFlexIdPdf(false);
+        }
+    };
+
+    const handleDownloadFraudFinderPdf = async () => {
+        const crs = getCrsSnapshot() as {
+            request_id?: string;
+            report?: Record<string, unknown>;
+            first_name?: string;
+            last_name?: string;
+            address?: string;
+        };
+        const requestData = (crs.report && typeof crs.report === "object" ? (crs.report as Record<string, unknown>).requestData : null) as
+            | Record<string, unknown>
+            | null;
+
+        if (!crs.first_name || !crs.last_name || !crs.address) {
+            window.alert("Fraud Finder PDF unavailable: persisted first name, last name, or address is missing.");
+            return;
+        }
+
+        try {
+            setDownloadingFraudPdf(true);
+            const blob = await downloadCRSFraudFinderPdf(
+                crs.request_id,
+                requestData ?? {},
+                crs.first_name,
+                crs.last_name,
+                crs.address
+            );
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `crs-fraud-finder-report-${crs.request_id || "latest"}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        } catch {
+            window.alert("Unable to download CRS Fraud Finder PDF right now.");
+        } finally {
+            setDownloadingFraudPdf(false);
+        }
+    };
+
+    const handleExportEvidenceZip = () => {
+        const payload = {
+            generated_at: new Date().toISOString(),
+            export_type: "verification_evidence_zip",
+            note: "ZIP packaging not integrated yet. JSON checklist included for demo.",
+            checklist: (fundingData ?? getFallbackFundingPayload()).appraiser_evidence_checklist,
+            placeholder_files: [
+                "receipts/fertilizer-receipts-demo.pdf",
+                "logs/irrigation-log-demo.csv",
+                "photos/field-practice-change-demo.jpg",
+            ],
+        };
+        downloadBlob(JSON.stringify(payload, null, 2), "application/json", `verification-evidence-${new Date().toISOString().slice(0, 10)}.json`);
+    };
+
+    const handleExportRegistrySubmission = () => {
+        const header = ["field_name", "lat", "lon", "area", "area_unit", "crop_type", "baseline_tco2e_y", "savings_low", "savings_high"];
         const rows = fields.map((f) => [
             f.fieldName,
-            (f.analysis?.audit.baseline_tco2e_y ?? 0).toFixed(2),
-            (f.analysis?.reduction_summary.annual_tco2e_saved?.[0] ?? 0).toFixed(2),
-            (f.analysis?.reduction_summary.annual_tco2e_saved?.[1] ?? 0).toFixed(2),
-            (f.analysis?.satellite.ndvi_mean ?? 0).toFixed(3),
-            (((f.analysis?.satellite.cropland_confidence ?? 0) * 100).toFixed(0)),
-            String(f.creditBalance ?? 0),
+            f.config.latitude,
+            f.config.longitude,
+            f.config.area_value,
+            f.config.area_unit,
+            f.config.crop_type,
+            f.analysis?.audit.baseline_tco2e_y ?? 0,
+            f.analysis?.reduction_summary.annual_tco2e_saved?.[0] ?? 0,
+            f.analysis?.reduction_summary.annual_tco2e_saved?.[1] ?? 0,
         ]);
         const csv = [header.join(","), ...rows.map((r) => r.join(","))].join("\n");
-        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `field-data-${new Date().toISOString().slice(0, 10)}.csv`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
+        downloadBlob(csv, "text/csv;charset=utf-8;", `registry-submission-${new Date().toISOString().slice(0, 10)}.csv`);
     };
 
-    const handleDownloadPdf = () => {
-        // Lightweight fallback export for demo environments without a PDF generator.
-        const summary = [
-            "Credit Summary",
-            `Farm: ${farm.farm_name}`,
-            `Location: ${farm.state}${farm.country ? `, ${farm.country}` : ""}`,
-            `Baseline Carbon Estimate: ${totalBaseline.toFixed(1)} tCO2e/yr`,
-            `Estimated Credit Balance: $${totalCredits.toLocaleString()}`,
-        ].join("\n");
-        const blob = new Blob([summary], { type: "text/plain;charset=utf-8;" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `credit-summary-${new Date().toISOString().slice(0, 10)}.txt`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
+    const handleExportFundingBundle = () => {
+        const payload = {
+            generated_at: new Date().toISOString(),
+            export_type: "funding_application_bundle",
+            farm,
+            recommended_measures: (fundingData ?? getFallbackFundingPayload()).recommended_measures,
+            ranked_offers: (fundingData ?? getFallbackFundingPayload()).offers.ranked_offers,
+            note: "Provider-specific prefill forms are placeholders in this demo.",
+        };
+        downloadBlob(JSON.stringify(payload, null, 2), "application/json", `funding-application-bundle-${new Date().toISOString().slice(0, 10)}.json`);
+    };
+
+    const handleExportPracticeLog = () => {
+        const header = ["field_name", "step_id", "step_title", "completed", "expected_impact"];
+        const rows: string[][] = [];
+        fields.forEach((f) => {
+            f.steps.forEach((s) => {
+                rows.push([f.fieldName, s.id, s.title, String(s.completed), s.expectedImpact]);
+            });
+        });
+        const csv = [header.join(","), ...rows.map((r) => r.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(","))].join("\n");
+        downloadBlob(csv, "text/csv;charset=utf-8;", `practice-change-log-${new Date().toISOString().slice(0, 10)}.csv`);
+    };
+
+    const handleExportForecastWorkbook = () => {
+        const payload = {
+            generated_at: new Date().toISOString(),
+            export_type: "forecast_sensitivity_workbook_xlsx",
+            note: "XLSX generation not integrated yet. CSV-style scenario table included for demo.",
+            scenarios: fields.map((f) => ({
+                field: f.fieldName,
+                low_tco2e: f.analysis?.reduction_summary.annual_tco2e_saved?.[0] ?? 0,
+                high_tco2e: f.analysis?.reduction_summary.annual_tco2e_saved?.[1] ?? 0,
+                low_value_usd: (f.analysis?.reduction_summary.annual_tco2e_saved?.[0] ?? 0) * 10,
+                mid_value_usd: (f.analysis?.reduction_summary.annual_tco2e_saved?.[0] ?? 0) * 25,
+                high_value_usd: (f.analysis?.reduction_summary.annual_tco2e_saved?.[1] ?? 0) * 40,
+            })),
+        };
+        downloadBlob(JSON.stringify(payload, null, 2), "application/json", `forecast-sensitivity-${new Date().toISOString().slice(0, 10)}.json`);
     };
 
     if (fields.length === 0) {
@@ -213,53 +489,61 @@ export default function DashboardView({ farm, fields, onFieldsChange, onBack, fu
 
     return (
         <div className="min-h-screen botanical-reveal">
-            <header className="sticky top-0 z-30 border-b border-[#E6E2DA] bg-[#F9F8F4]/90 backdrop-blur-sm">
-                <div className="max-w-7xl mx-auto px-4 md:px-6 py-4 flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-full soft-pill flex items-center justify-center">
-                            <Leaf className="h-5 w-5 text-[#8C9A84]" strokeWidth={1.5} />
-                        </div>
-                        <div>
-                            <h1 className="font-display text-2xl md:text-3xl font-semibold leading-tight">{farm.farm_name}</h1>
-                            <p className="text-sm text-muted">{farm.state}{farm.country ? `, ${farm.country}` : ""}</p>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <button
-                            onClick={onBack}
-                            className="px-3 md:px-4 py-2 text-xs md:text-sm btn-organic-secondary inline-flex items-center gap-1"
-                        >
-                            <ArrowLeft className="h-3.5 w-3.5" /> Back
-                        </button>
-                    </div>
-                </div>
-            </header>
-
             <div id="dashboard-main" className="max-w-7xl mx-auto px-4 md:px-6 py-8 space-y-8">
                 <div className="glass-card p-4 md:p-5 border border-[#DCCFC2] shadow-[0_12px_20px_-12px_rgba(45,58,49,0.25)]">
-                    <div className="flex items-center gap-6 overflow-x-auto">
-                        {[
-                            { id: "overview", label: "Overview" },
-                            { id: "funding", label: "Funding Pathway" },
-                            { id: "verification", label: "Verification" },
-                            { id: "export", label: "Export" },
-                        ].map((tab) => (
+                    <div className="flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-6 overflow-x-auto">
                             <button
-                                key={tab.id}
-                                onClick={() => setActiveDrawerTab(tab.id as "overview" | "funding" | "verification" | "export")}
-                                className={`pb-2 text-base whitespace-nowrap transition-colors border-b-2 ${activeDrawerTab === tab.id
-                                    ? "text-[#2D3A31] border-[#2F8F68] font-semibold"
-                                    : "text-[#7A8590] border-transparent"
-                                    }`}
+                                onClick={() => window.location.assign("/")}
+                                className="inline-flex items-center cursor-pointer group shrink-0"
+                                aria-label="Go to TerraFin home"
+                                title="TerraFin home"
                             >
-                                {tab.label}
+                                <span className="w-8 h-8 rounded-lg bg-[#2D3A31] flex items-center justify-center text-[#F9F8F4] font-display font-bold text-sm transition-transform group-hover:scale-110">
+                                    TF
+                                </span>
                             </button>
-                        ))}
+
+                            {[
+                                { id: "overview", label: "Overview" },
+                                { id: "funding", label: "Funding Pathway" },
+                                { id: "verification", label: "Verification" },
+                                { id: "export", label: "Export" },
+                            ].map((tab) => (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setActiveDrawerTab(tab.id as "overview" | "funding" | "verification" | "export")}
+                                    className={`pb-2 text-base whitespace-nowrap transition-colors border-b-2 ${activeDrawerTab === tab.id
+                                        ? "text-[#2D3A31] border-[#2F8F68] font-semibold"
+                                        : "text-[#7A8590] border-transparent"
+                                        }`}
+                                >
+                                    {tab.label}
+                                </button>
+                            ))}
+                        </div>
+                        <button
+                            onClick={onBack}
+                            className="h-9 w-9 btn-organic-secondary inline-flex items-center justify-center shrink-0"
+                            aria-label="Back"
+                            title="Back"
+                        >
+                            <ArrowLeft className="h-4 w-4" />
+                        </button>
                     </div>
                 </div>
 
                 {activeDrawerTab === "overview" && (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5 stagger-md">
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 stagger-md">
+                        <div className="glass-card card-lift p-6 border-[#DCCFC2]">
+                            <div className="text-xs font-semibold tracking-[0.16em] uppercase text-muted mb-2">Farm</div>
+                            <div className="text-2xl font-display font-semibold text-[#2D3A31]">{farm.farm_name}</div>
+                            <div className="mt-2 inline-flex items-center gap-1.5 text-sm text-muted">
+                                <MapPin className="h-4 w-4" />
+                                <span>{farm.state}{farm.country ? `, ${farm.country}` : ""}</span>
+                            </div>
+                        </div>
+
                         <div className="glass-card card-lift p-6">
                             <div className="text-xs font-semibold tracking-[0.16em] uppercase text-muted mb-2">Baseline Carbon Estimate</div>
                             <div className="text-4xl font-display font-semibold financial-number">
@@ -361,6 +645,83 @@ export default function DashboardView({ farm, fields, onFieldsChange, onBack, fu
                                 </div>
 
                                 <div className="rounded-2xl border border-[#E6E2DA] bg-white/70 p-5">
+                                    <h5 className="font-display text-xl font-semibold text-[#2D3A31]">Matched Offers</h5>
+                                    <p className="text-xs text-[#6A766E] mt-1">{fundingPayload.offers.disclaimer}</p>
+                                    <div className="mt-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                                        {fundingPayload.offers.ranked_offers.map((offer) => (
+                                            <div key={offer.provider_name} className="rounded-xl border border-[#ECE7DE] bg-[#F8F6F0] p-4">
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <div className="font-medium text-[#2D3A31]">{offer.provider_name}</div>
+                                                    <span className="text-xs px-2 py-1 rounded-full border border-[#D9E5D8] bg-[#ECF6ED] text-[#2F8F68]">
+                                                        Match {offer.match_score_0_100}
+                                                    </span>
+                                                </div>
+                                                <div className="text-xs text-[#6A766E] mt-1">{offer.offer_type}</div>
+                                                {offer.best_for && <p className="text-sm text-[#4D5C54] mt-2">{offer.best_for}</p>}
+                                                <div className="mt-2 text-xs text-[#5B6660]">
+                                                    Advance: ${offer.estimated_terms.advance_usd_range[0].toLocaleString()} - ${offer.estimated_terms.advance_usd_range[1].toLocaleString()}
+                                                </div>
+                                                <div className="text-xs text-[#5B6660]">
+                                                    APR: {offer.estimated_terms.apr_range[0]} - {offer.estimated_terms.apr_range[1]}%
+                                                </div>
+                                                <div className="text-xs text-[#5B6660]">
+                                                    Tenor: {offer.estimated_terms.tenor_months_range[0]} - {offer.estimated_terms.tenor_months_range[1]} months
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="rounded-2xl border border-[#E6E2DA] bg-white/70 p-5">
+                                    <div>
+                                        <h5 className="font-display text-xl font-semibold text-[#2D3A31]">Lender Packet</h5>
+                                        <p className="text-xs text-[#6A766E] mt-1">Credit bureau summary, projected cashflows, top offer, and risk notes.</p>
+                                        <p className="text-xs text-[#6A766E] mt-1">CRS summary uses payload if found; otherwise demo placeholder is included and marked.</p>
+                                    </div>
+                                    <div className="mt-4 flex flex-wrap gap-2">
+                                        <button
+                                            onClick={handleExportFullPortfolio}
+                                            className="px-4 py-2.5 rounded-xl border border-[#ECE7DE] bg-[#F8F6F0] text-[#2D3A31] text-sm font-medium inline-flex items-center gap-2.5 hover:bg-white transition-colors"
+                                        >
+                                            <Download className="h-4 w-4" />
+                                            Export Full Portfolio Report
+                                        </button>
+                                        <button
+                                            onClick={handleDownloadCreditBureauPdf}
+                                            disabled={downloadingCrsPdf}
+                                            className="px-4 py-2.5 rounded-xl border border-[#ECE7DE] bg-[#F8F6F0] text-[#2D3A31] text-sm font-medium inline-flex items-center gap-2.5 hover:bg-white transition-colors disabled:opacity-60"
+                                        >
+                                            <Download className="h-4 w-4" />
+                                            {downloadingCrsPdf ? "Downloading..." : "Credit Bureau PDF"}
+                                        </button>
+                                        <button
+                                            onClick={handleDownloadCriminalReport}
+                                            disabled={downloadingCriminalReport}
+                                            className="px-4 py-2.5 rounded-xl border border-[#ECE7DE] bg-[#F8F6F0] text-[#2D3A31] text-sm font-medium inline-flex items-center gap-2.5 hover:bg-white transition-colors disabled:opacity-60"
+                                        >
+                                            <Download className="h-4 w-4" />
+                                            {downloadingCriminalReport ? "Downloading..." : "Criminal Report"}
+                                        </button>
+                                        <button
+                                            onClick={handleDownloadFlexIdPdf}
+                                            disabled={downloadingFlexIdPdf}
+                                            className="px-4 py-2.5 rounded-xl border border-[#ECE7DE] bg-[#F8F6F0] text-[#2D3A31] text-sm font-medium inline-flex items-center gap-2.5 hover:bg-white transition-colors disabled:opacity-60"
+                                        >
+                                            <Download className="h-4 w-4" />
+                                            {downloadingFlexIdPdf ? "Downloading..." : "FlexID PDF"}
+                                        </button>
+                                        <button
+                                            onClick={handleDownloadFraudFinderPdf}
+                                            disabled={downloadingFraudPdf}
+                                            className="px-4 py-2.5 rounded-xl border border-[#ECE7DE] bg-[#F8F6F0] text-[#2D3A31] text-sm font-medium inline-flex items-center gap-2.5 hover:bg-white transition-colors disabled:opacity-60"
+                                        >
+                                            <Download className="h-4 w-4" />
+                                            {downloadingFraudPdf ? "Downloading..." : "Fraud Finder PDF"}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="rounded-2xl border border-[#E6E2DA] bg-white/70 p-5">
                                     <h5 className="font-display text-xl font-semibold text-[#2D3A31]">Recommended Actions</h5>
                                     <div className="mt-4 space-y-3">
                                         {fundingPayload.recommended_measures.map((measure, idx) => (
@@ -447,92 +808,101 @@ export default function DashboardView({ farm, fields, onFieldsChange, onBack, fu
                                     </div>
                                 </div>
 
-                                <div className="rounded-2xl border border-[#E6E2DA] bg-white/70 p-5">
-                                    <h5 className="font-display text-xl font-semibold text-[#2D3A31]">Matched Offers</h5>
-                                    <p className="text-xs text-[#6A766E] mt-1">{fundingPayload.offers.disclaimer}</p>
-                                    <div className="mt-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                                        {fundingPayload.offers.ranked_offers.map((offer) => (
-                                            <div key={offer.provider_name} className="rounded-xl border border-[#ECE7DE] bg-[#F8F6F0] p-4">
-                                                <div className="flex items-center justify-between gap-2">
-                                                    <div className="font-medium text-[#2D3A31]">{offer.provider_name}</div>
-                                                    <span className="text-xs px-2 py-1 rounded-full border border-[#D9E5D8] bg-[#ECF6ED] text-[#2F8F68]">
-                                                        Match {offer.match_score_0_100}
-                                                    </span>
-                                                </div>
-                                                <div className="text-xs text-[#6A766E] mt-1">{offer.offer_type}</div>
-                                                {offer.best_for && <p className="text-sm text-[#4D5C54] mt-2">{offer.best_for}</p>}
-                                                <div className="mt-2 text-xs text-[#5B6660]">
-                                                    Advance: ${offer.estimated_terms.advance_usd_range[0].toLocaleString()} - ${offer.estimated_terms.advance_usd_range[1].toLocaleString()}
-                                                </div>
-                                                <div className="text-xs text-[#5B6660]">
-                                                    APR: {offer.estimated_terms.apr_range[0]} - {offer.estimated_terms.apr_range[1]}%
-                                                </div>
-                                                <div className="text-xs text-[#5B6660]">
-                                                    Tenor: {offer.estimated_terms.tenor_months_range[0]} - {offer.estimated_terms.tenor_months_range[1]} months
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {fundingPayload.notes.length > 0 && (
-                                    <div className="rounded-2xl border border-[#E6E2DA] bg-[#F8F6F0] p-5">
-                                        <h5 className="font-display text-lg font-semibold text-[#2D3A31]">Notes</h5>
-                                        <ul className="mt-2 space-y-1 text-sm text-[#4D5C54]">
-                                            {fundingPayload.notes.map((note) => (
-                                                <li key={note} className="flex items-start gap-2"><span className="text-[#8C9A84] mt-0.5">•</span>{note}</li>
-                                            ))}
-                                        </ul>
-                                    </div>
-                                )}
                             </div>
                         )}
 
                         {activeDrawerTab === "export" && (
                             <div className="space-y-6">
-                                <h4 className="font-display text-2xl font-semibold text-[#2D3A31]">Export & Share</h4>
-                                <p className="text-sm text-muted -mt-3">Download clean files for lenders, partners, and reporting workflows.</p>
+                                <p className="text-sm text-muted -mt-3">Download reports for lenders, verification, registry submission, and operations.</p>
 
                                 <div className="space-y-4">
                                     <div className="rounded-2xl border border-[#E6E2DA] bg-[#F8F6F0] p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                                         <div>
-                                            <h5 className="font-display text-lg font-semibold text-[#2D3A31]">Full Dashboard Data</h5>
-                                            <p className="text-sm text-muted mt-1.5">All metrics, progress, and field-level outputs in one file</p>
+                                            <h5 className="font-display text-lg font-semibold text-[#2D3A31]">Full Portfolio Report</h5>
+                                            <p className="text-sm text-muted mt-1.5">Farm summary, baseline, reductions, funding pathway, and verification status.</p>
+                                            <p className="text-xs text-[#7A847E] mt-1">Uses available dashboard and funding data. PDF is represented as JSON in this demo.</p>
                                         </div>
                                         <button
-                                            onClick={handleDownloadJson}
+                                            onClick={handleExportFullPortfolio}
                                             className="px-5 py-3 rounded-2xl border border-[#D8D3C8] bg-white/80 text-[#2D3A31] text-sm font-medium inline-flex items-center gap-3 hover:bg-white transition-colors self-start md:self-auto"
                                         >
                                             <Download className="h-5 w-5" />
-                                            Export JSON
+                                            Export Report
                                         </button>
                                     </div>
 
                                     <div className="rounded-2xl border border-[#E6E2DA] bg-[#F8F6F0] p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                                         <div>
-                                            <h5 className="font-display text-lg font-semibold text-[#2D3A31]">Credit Snapshot</h5>
-                                            <p className="text-sm text-muted mt-1.5">Baseline estimates and projected credit outcomes</p>
+                                            <h5 className="font-display text-lg font-semibold text-[#2D3A31]">Verification Evidence ZIP</h5>
+                                            <p className="text-sm text-muted mt-1.5">Evidence checklist, logs index, and appraiser-ready artifacts bundle.</p>
+                                            <p className="text-xs text-[#7A847E] mt-1">ZIP packaging uses demo placeholder file references for now.</p>
                                         </div>
                                         <button
-                                            onClick={handleDownloadPdf}
+                                            onClick={handleExportEvidenceZip}
                                             className="px-5 py-3 rounded-2xl border border-[#D8D3C8] bg-white/80 text-[#2D3A31] text-sm font-medium inline-flex items-center gap-3 hover:bg-white transition-colors self-start md:self-auto"
                                         >
                                             <Download className="h-5 w-5" />
-                                            Export Summary
+                                            Export Evidence
                                         </button>
                                     </div>
 
                                     <div className="rounded-2xl border border-[#E6E2DA] bg-[#F8F6F0] p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                                         <div>
-                                            <h5 className="font-display text-lg font-semibold text-[#2D3A31]">Field Metrics</h5>
-                                            <p className="text-sm text-muted mt-1.5">Detailed field-by-field values for analysis and sharing</p>
+                                            <h5 className="font-display text-lg font-semibold text-[#2D3A31]">Carbon Registry Submission</h5>
+                                            <p className="text-sm text-muted mt-1.5">Structured field and reduction data package for registry onboarding.</p>
+                                            <p className="text-xs text-[#7A847E] mt-1">Uses available field config and analysis outputs.</p>
                                         </div>
                                         <button
-                                            onClick={handleDownloadCsv}
+                                            onClick={handleExportRegistrySubmission}
                                             className="px-5 py-3 rounded-2xl border border-[#D8D3C8] bg-white/80 text-[#2D3A31] text-sm font-medium inline-flex items-center gap-3 hover:bg-white transition-colors self-start md:self-auto"
                                         >
                                             <Download className="h-5 w-5" />
-                                            Export CSV
+                                            Export Registry CSV
+                                        </button>
+                                    </div>
+
+                                    <div className="rounded-2xl border border-[#E6E2DA] bg-[#F8F6F0] p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                                        <div>
+                                            <h5 className="font-display text-lg font-semibold text-[#2D3A31]">Funding Application Bundle</h5>
+                                            <p className="text-sm text-muted mt-1.5">Offer matches, required docs, and package-ready application details.</p>
+                                            <p className="text-xs text-[#7A847E] mt-1">Provider prefill fields include demo placeholders where unavailable.</p>
+                                        </div>
+                                        <button
+                                            onClick={handleExportFundingBundle}
+                                            className="px-5 py-3 rounded-2xl border border-[#D8D3C8] bg-white/80 text-[#2D3A31] text-sm font-medium inline-flex items-center gap-3 hover:bg-white transition-colors self-start md:self-auto"
+                                        >
+                                            <Download className="h-5 w-5" />
+                                            Export Bundle
+                                        </button>
+                                    </div>
+
+                                    <div className="rounded-2xl border border-[#E6E2DA] bg-[#F8F6F0] p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                                        <div>
+                                            <h5 className="font-display text-lg font-semibold text-[#2D3A31]">Practice Change Log</h5>
+                                            <p className="text-sm text-muted mt-1.5">Operational log for tillage, fertilizer, irrigation, and completion state.</p>
+                                            <p className="text-xs text-[#7A847E] mt-1">Built from current step/action data in dashboard.</p>
+                                        </div>
+                                        <button
+                                            onClick={handleExportPracticeLog}
+                                            className="px-5 py-3 rounded-2xl border border-[#D8D3C8] bg-white/80 text-[#2D3A31] text-sm font-medium inline-flex items-center gap-3 hover:bg-white transition-colors self-start md:self-auto"
+                                        >
+                                            <Download className="h-5 w-5" />
+                                            Export Log CSV
+                                        </button>
+                                    </div>
+
+                                    <div className="rounded-2xl border border-[#E6E2DA] bg-[#F8F6F0] p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                                        <div>
+                                            <h5 className="font-display text-lg font-semibold text-[#2D3A31]">Forecast & Sensitivity Workbook</h5>
+                                            <p className="text-sm text-muted mt-1.5">Low, mid, high value scenarios for planning and lender discussions.</p>
+                                            <p className="text-xs text-[#7A847E] mt-1">XLSX output is mocked as JSON table in this demo and clearly labeled.</p>
+                                        </div>
+                                        <button
+                                            onClick={handleExportForecastWorkbook}
+                                            className="px-5 py-3 rounded-2xl border border-[#D8D3C8] bg-white/80 text-[#2D3A31] text-sm font-medium inline-flex items-center gap-3 hover:bg-white transition-colors self-start md:self-auto"
+                                        >
+                                            <Download className="h-5 w-5" />
+                                            Export Workbook
                                         </button>
                                     </div>
                                 </div>

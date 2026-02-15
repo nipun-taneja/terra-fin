@@ -27,16 +27,135 @@ export async function verifyCRS(req: CRSRequest): Promise<CRSResponse> {
     return res.json();
 }
 
-export async function downloadCRSPdf(requestId: string, requestData: Record<string, unknown>): Promise<Blob> {
+export async function downloadCRSPdf(
+    requestId: string,
+    requestData: Record<string, unknown> = {},
+    firstName?: string,
+    lastName?: string,
+    address?: string
+): Promise<Blob> {
     const res = await fetch(`${API_BASE}/api/credibility/pdf`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
             request_id: requestId,
             request_data: requestData,
+            first_name: firstName,
+            last_name: lastName,
+            address,
         }),
     });
     if (!res.ok) throw new Error(`CRS PDF download failed: ${res.status}`);
+    return res.blob();
+}
+
+export async function downloadCRSCriminalReport(
+    requestId?: string,
+    requestData: Record<string, unknown> = {},
+    firstName?: string,
+    lastName?: string,
+    address?: string
+): Promise<Blob> {
+    const res = await fetch(`${API_BASE}/api/credibility/criminal`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            request_id: requestId,
+            request_data: requestData,
+            first_name: firstName,
+            last_name: lastName,
+            address,
+        }),
+    });
+    if (!res.ok) throw new Error(`CRS criminal report download failed: ${res.status}`);
+    return res.blob();
+}
+
+export async function downloadCRSFlexIdReport(
+    requestId?: string,
+    requestData: Record<string, unknown> = {},
+    firstName?: string,
+    lastName?: string,
+    address?: string
+): Promise<Blob> {
+    const res = await fetch(`${API_BASE}/api/credibility/flex-id`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            request_id: requestId,
+            request_data: requestData,
+            first_name: firstName,
+            last_name: lastName,
+            address,
+        }),
+    });
+    if (!res.ok) throw new Error(`CRS FlexID report download failed: ${res.status}`);
+    return res.blob();
+}
+
+export async function downloadCRSFlexIdPdf(
+    requestId?: string,
+    requestData: Record<string, unknown> = {},
+    firstName?: string,
+    lastName?: string,
+    address?: string
+): Promise<Blob> {
+    const res = await fetch(`${API_BASE}/api/credibility/flex-id/pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            request_id: requestId,
+            request_data: requestData,
+            first_name: firstName,
+            last_name: lastName,
+            address,
+        }),
+    });
+    if (!res.ok) throw new Error(`CRS FlexID PDF download failed: ${res.status}`);
+    return res.blob();
+}
+
+export async function downloadCRSFraudFinderReport(
+    requestId?: string,
+    requestData: Record<string, unknown> = {},
+    firstName?: string,
+    lastName?: string,
+    address?: string
+): Promise<Blob> {
+    const res = await fetch(`${API_BASE}/api/credibility/fraud-finder`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            request_id: requestId,
+            request_data: requestData,
+            first_name: firstName,
+            last_name: lastName,
+            address,
+        }),
+    });
+    if (!res.ok) throw new Error(`CRS Fraud Finder report download failed: ${res.status}`);
+    return res.blob();
+}
+
+export async function downloadCRSFraudFinderPdf(
+    requestId?: string,
+    requestData: Record<string, unknown> = {},
+    firstName?: string,
+    lastName?: string,
+    address?: string
+): Promise<Blob> {
+    const res = await fetch(`${API_BASE}/api/credibility/fraud-finder/pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            request_id: requestId,
+            request_data: requestData,
+            first_name: firstName,
+            last_name: lastName,
+            address,
+        }),
+    });
+    if (!res.ok) throw new Error(`CRS Fraud Finder PDF download failed: ${res.status}`);
     return res.blob();
 }
 

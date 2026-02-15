@@ -316,7 +316,7 @@ def _generate_with_openai(
             {"role": "system", "content": "Output strict JSON only."},
             {"role": "user", "content": prompt},
         ],
-        "temperature": 0.4,
+        "temperature": 0.8,
         "response_format": {"type": "json_object"},
     }
     req = Request(

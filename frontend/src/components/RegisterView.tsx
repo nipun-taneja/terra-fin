@@ -168,6 +168,17 @@ export default function RegisterView({ onVerified }: Props) {
                 country: form.address,
             });
             setCrsResult(res);
+            try {
+                window.localStorage.setItem("crs_result", JSON.stringify(res));
+                if (res.request_id) {
+                    window.localStorage.setItem("crs_request_id", res.request_id);
+                }
+                window.localStorage.setItem("crs_first_name", form.firstName.trim());
+                window.localStorage.setItem("crs_last_name", form.lastName.trim());
+                window.localStorage.setItem("crs_address", form.address.trim());
+            } catch {
+                // Ignore storage issues; UI can continue without persisted CRS cache.
+            }
             if (res.credible) {
                 setState("success");
             } else {
