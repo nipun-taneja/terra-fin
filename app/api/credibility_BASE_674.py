@@ -3,19 +3,12 @@ from __future__ import annotations
 
 import os
 import re
-from typing import Any, Optional, List, Dict
+from typing import Any, Optional, List
 
-<<<<<<< HEAD
-import requests  # type: ignore[import]
-from fastapi import APIRouter, HTTPException  # type: ignore[import]
-from pydantic import BaseModel, Field  # type: ignore[import]
-from dotenv import load_dotenv  # type: ignore[import]
-=======
 import requests
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
->>>>>>> f54381ffb19f85367f1dd126c5a5645636ae2406
 
 router = APIRouter()
 load_dotenv()
@@ -39,13 +32,7 @@ class CredibilityResponse(BaseModel):
     score: float  # 0..1
     flags: List[str]
     request_id: Optional[str] = None
-    report: Optional[Dict[str, Any]] = None
-
-
-class CredibilityPdfRequest(BaseModel):
-    """Request schema for downloading CRS PDF report by RequestID."""
-    request_id: str = Field(..., min_length=1)
-    request_data: dict[str, Any] = Field(default_factory=dict)
+    report: Optional[dict[str, Any]] = None
 
 
 def _parse_address(address: Optional[str]) -> tuple[str, str, str, str]:
@@ -79,34 +66,37 @@ def _bureau_path(bureau: str) -> str:
     return "experian/credit-profile/credit-report/standard"
 
 
-def _bureau_pdf_path(bureau: str) -> str:
-    key = bureau.strip().lower()
-    if key == "equifax":
-        return "equifax/standard-credit-report/pdf"
-    if key == "transunion":
-        return "transunion/standard-credit-report/pdf"
-    return "experian/credit-profile/standard-credit-report/pdf"
-
-
-def _load_crs_settings() -> tuple[str, str, str, str, str, int]:
-    """Load required CRS settings from environment."""
+@router.post("/api/credibility/check", response_model=CredibilityResponse)
+def check_credibility(req: CredibilityRequest) -> CredibilityResponse:
+    """Check credibility by logging into CRS and pulling a sandbox credit report."""
     base_url = os.getenv("CRS_BASE_URL", "").rstrip("/")
-    username = os.getenv("CRS_USERNAME") or ""
-    password = os.getenv("CRS_PASSWORD") or ""
+    username = os.getenv("CRS_USERNAME")
+    password = os.getenv("CRS_PASSWORD")
     bureau = os.getenv("CRS_BUREAU", "experian")
     config = os.getenv("CRS_SANDBOX_CONFIG", "exp-prequal-vantage4")
     timeout_s = int(os.getenv("CRS_TIMEOUT_SECONDS", "30"))
+
+    # Sandbox identity defaults (required by bureau APIs).
+    sandbox_birth_date = os.getenv("CRS_SANDBOX_BIRTHDATE", "1963-11-12")
+    sandbox_ssn = os.getenv("CRS_SANDBOX_SSN", "666265040")
 
     if not base_url or not username or not password:
         raise HTTPException(
             status_code=500,
             detail="CRS is not configured. Set CRS_BASE_URL, CRS_USERNAME, CRS_PASSWORD."
         )
-    return base_url, username, password, bureau, config, timeout_s
 
+    first_name = (req.first_name or req.farmer_name.split(" ")[0]).strip()
+    last_name = (req.last_name or req.farmer_name.replace(first_name, "", 1)).strip()
+    line1, city, state, postal = _parse_address(req.address or req.country)
 
-def _login_crs_token(base_url: str, username: str, password: str, timeout_s: int) -> str:
-    """Authenticate with CRS and return JWT token."""
+    if not first_name or not last_name:
+        raise HTTPException(status_code=400, detail="First and last name are required.")
+
+    if not line1:
+        raise HTTPException(status_code=400, detail="Address is required.")
+
+    # CRS login
     try:
         login_resp = requests.post(
             f"{base_url}/users/login",
@@ -121,29 +111,6 @@ def _login_crs_token(base_url: str, username: str, password: str, timeout_s: int
     token = login_data.get("token")
     if not token:
         raise HTTPException(status_code=502, detail="CRS login succeeded but token missing.")
-    return token
-
-
-@router.post("/api/credibility/check", response_model=CredibilityResponse)
-def check_credibility(req: CredibilityRequest) -> CredibilityResponse:
-    """Check credibility by logging into CRS and pulling a sandbox credit report."""
-    base_url, username, password, bureau, config, timeout_s = _load_crs_settings()
-
-    # Sandbox identity defaults (required by bureau APIs).
-    sandbox_birth_date = os.getenv("CRS_SANDBOX_BIRTHDATE", "1963-11-12")
-    sandbox_ssn = os.getenv("CRS_SANDBOX_SSN", "666265040")
-
-    first_name = (req.first_name or req.farmer_name.split(" ")[0]).strip()
-    last_name = (req.last_name or req.farmer_name.replace(first_name, "", 1)).strip()
-    line1, city, state, postal = _parse_address(req.address or req.country)
-
-    if not first_name or not last_name:
-        raise HTTPException(status_code=400, detail="First and last name are required.")
-
-    if not line1:
-        raise HTTPException(status_code=400, detail="Address is required.")
-
-    token = _login_crs_token(base_url, username, password, timeout_s)
 
     report_payload = {
         "firstName": first_name,
@@ -196,15 +163,6 @@ def check_credibility(req: CredibilityRequest) -> CredibilityResponse:
         flags.append("empty_report")
     score = 0.9 if request_id else 0.8
 
-<<<<<<< HEAD
-    return CredibilityResponse(**{
-        "credible": len(flags) == 0,
-        "score": float(score),
-        "flags": flags,
-        "request_id": request_id,
-        "report": report_data,
-    })
-=======
     return CredibilityResponse(
         credible=len(flags) == 0,
         score=score,
@@ -212,50 +170,3 @@ def check_credibility(req: CredibilityRequest) -> CredibilityResponse:
         request_id=request_id,
         report=report_data,
     )
-
-
-@router.post("/api/credibility/pdf")
-def download_credibility_pdf(req: CredibilityPdfRequest) -> Response:
-    """Download CRS PDF report using RequestID and original request payload."""
-    base_url, username, password, bureau, config, timeout_s = _load_crs_settings()
-    token = _login_crs_token(base_url, username, password, timeout_s)
-
-    if not req.request_data:
-        raise HTTPException(status_code=400, detail="request_data is required to generate PDF.")
-
-    pdf_url = f"{base_url}/{_bureau_pdf_path(bureau)}/{config}/{req.request_id}"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/pdf",
-    }
-
-    try:
-        pdf_resp = requests.post(
-            pdf_url,
-            json=req.request_data,
-            headers=headers,
-            timeout=timeout_s,
-        )
-        if pdf_resp.status_code in (401, 403):
-            retry_headers = {"Authorization": token, "Accept": "application/pdf"}
-            pdf_resp = requests.post(
-                pdf_url,
-                json=req.request_data,
-                headers=retry_headers,
-                timeout=timeout_s,
-            )
-        pdf_resp.raise_for_status()
-    except requests.RequestException as exc:
-        raise HTTPException(status_code=502, detail=f"CRS PDF request failed: {exc}") from exc
-
-    content_type = pdf_resp.headers.get("Content-Type", "application/pdf")
-    if "pdf" not in content_type.lower():
-        raise HTTPException(status_code=502, detail="CRS PDF endpoint did not return a PDF payload.")
-
-    filename = f"crs-credit-report-{req.request_id}.pdf"
-    return Response(
-        content=pdf_resp.content,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
->>>>>>> f54381ffb19f85367f1dd126c5a5645636ae2406

@@ -53,7 +53,7 @@ const HowItWorksView: React.FC<HowItWorksViewProps> = ({ onNavigate }) => {
                         </h1>
                         <p className="text-base md:text-lg text-[#2D3A31]/70 max-w-2xl mx-auto leading-relaxed break-words">
                             Following the roadmap published in <i>Nature</i>, we solve the $100B funding gap for the
-                            "Big 4" (Beef, Dairy, Rice, Maize) smallholders.
+                            &quot;Big 4&quot; (Beef, Dairy, Rice, Maize) smallholders.
                         </p>
                     </div>
 
@@ -93,8 +93,8 @@ const HowItWorksView: React.FC<HowItWorksViewProps> = ({ onNavigate }) => {
                                 The Result
                             </h3>
                             <p className="text-sm text-[#2D3A31]/70 flex-grow leading-relaxed break-words">
-                                We pre-sell projected carbon credits to corporate buyers (Nestlé, Microsoft). This "Voluntary
-                                Carbon Market" pays for the farmer&apos;s transition.
+                                We pre-sell projected carbon credits to corporate buyers (Nestlé, Microsoft). This &quot;Voluntary
+                                Carbon Market&quot; pays for the farmer&apos;s transition.
                             </p>
                         </div>
                     </section>

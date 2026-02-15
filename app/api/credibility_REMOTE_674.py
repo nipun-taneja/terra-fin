@@ -3,19 +3,12 @@ from __future__ import annotations
 
 import os
 import re
-from typing import Any, Optional, List, Dict
+from typing import Any, Optional, List
 
-<<<<<<< HEAD
-import requests  # type: ignore[import]
-from fastapi import APIRouter, HTTPException  # type: ignore[import]
-from pydantic import BaseModel, Field  # type: ignore[import]
-from dotenv import load_dotenv  # type: ignore[import]
-=======
 import requests
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
->>>>>>> f54381ffb19f85367f1dd126c5a5645636ae2406
 
 router = APIRouter()
 load_dotenv()
@@ -39,7 +32,7 @@ class CredibilityResponse(BaseModel):
     score: float  # 0..1
     flags: List[str]
     request_id: Optional[str] = None
-    report: Optional[Dict[str, Any]] = None
+    report: Optional[dict[str, Any]] = None
 
 
 class CredibilityPdfRequest(BaseModel):
@@ -196,15 +189,6 @@ def check_credibility(req: CredibilityRequest) -> CredibilityResponse:
         flags.append("empty_report")
     score = 0.9 if request_id else 0.8
 
-<<<<<<< HEAD
-    return CredibilityResponse(**{
-        "credible": len(flags) == 0,
-        "score": float(score),
-        "flags": flags,
-        "request_id": request_id,
-        "report": report_data,
-    })
-=======
     return CredibilityResponse(
         credible=len(flags) == 0,
         score=score,
@@ -258,4 +242,3 @@ def download_credibility_pdf(req: CredibilityPdfRequest) -> Response:
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
->>>>>>> f54381ffb19f85367f1dd126c5a5645636ae2406
