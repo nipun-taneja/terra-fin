@@ -5,6 +5,7 @@ import {
     ShieldCheck,
     ShieldAlert,
     Loader2,
+    Download,
     HelpCircle,
     ArrowRight,
     User,
@@ -15,7 +16,7 @@ import {
     X,
 } from "lucide-react";
 import { FarmerIdentity, CRSResponse } from "@/lib/types";
-import { verifyCRS } from "@/lib/api";
+import { downloadCRSPdf, verifyCRS } from "@/lib/api";
 
 type VerifyState = "idle" | "loading" | "success" | "error";
 
@@ -137,6 +138,8 @@ export default function RegisterView({ onVerified }: Props) {
     const [crsResult, setCrsResult] = useState<CRSResponse | null>(null);
     const [showTooltip, setShowTooltip] = useState(false);
     const [showImproveModal, setShowImproveModal] = useState(false);
+    const [downloadingPdf, setDownloadingPdf] = useState(false);
+    const [pdfError, setPdfError] = useState<string | null>(null);
     const [formStep, setFormStep] = useState(0);
 
     const validate = (): boolean => {
@@ -191,6 +194,37 @@ export default function RegisterView({ onVerified }: Props) {
             : "focus:border-[#8C9A84]"
         }`;
 
+    const handleDownloadPdf = async () => {
+        if (!crsResult?.request_id) {
+            setPdfError("Missing request ID for PDF download.");
+            return;
+        }
+        const reportObj = asRecord(crsResult.report);
+        const requestData = asRecord(reportObj?.requestData);
+        if (!requestData) {
+            setPdfError("Missing request payload from CRS response.");
+            return;
+        }
+
+        setPdfError(null);
+        setDownloadingPdf(true);
+        try {
+            const blob = await downloadCRSPdf(crsResult.request_id, requestData);
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `crs-credit-report-${crsResult.request_id}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        } catch {
+            setPdfError("Unable to download PDF right now. Please try again.");
+        } finally {
+            setDownloadingPdf(false);
+        }
+    };
+
     const reportScore = findBureauScoreFromReport(crsResult?.report);
     const tradelineCount = findArrayLengthByKey(crsResult?.report, ["tradelines", "tradeLines", "tradeLine"]);
     const inquiryCount = findArrayLengthByKey(crsResult?.report, ["inquiries", "inquiry"]);
@@ -211,7 +245,15 @@ export default function RegisterView({ onVerified }: Props) {
                 <div className="glass-card card-lift p-6 md:p-8 space-y-5">
                     {state === "success" ? (
                         <div className="py-2 space-y-4">
-                            <div className="rounded-3xl border border-[#D8D3C8] bg-gradient-to-br from-[#F8F6F0] to-[#ECE8DE] p-4 md:p-5">
+                            <div className="relative rounded-3xl border border-[#D8D3C8] bg-gradient-to-br from-[#F8F6F0] to-[#ECE8DE] p-4 md:p-5">
+                                <button
+                                    onClick={handleDownloadPdf}
+                                    disabled={downloadingPdf || !crsResult?.request_id}
+                                    aria-label="Download PDF Credit Report"
+                                    className="absolute top-4 right-4 h-10 w-10 rounded-full border border-[#D8D3C8] bg-white/80 inline-flex items-center justify-center text-[#2D3A31] hover:bg-white transition-colors disabled:opacity-50"
+                                >
+                                    {downloadingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                                </button>
                                 <div className="flex items-center gap-3">
                                     <div className="relative h-28 w-28 shrink-0 rounded-full p-2" style={donutStyle}>
                                         <div className="h-full w-full rounded-full bg-[#F9F8F4] border border-[#E6E2DA] flex flex-col items-center justify-center">
@@ -231,6 +273,7 @@ export default function RegisterView({ onVerified }: Props) {
                                     </div>
                                 </div>
                             </div>
+                            {pdfError && <p className="text-xs text-[#C27B66] text-center">{pdfError}</p>}
 
                             <div className="rounded-2xl border border-[#E6E2DA] bg-white/70 p-4 space-y-3 animate-[botanical-reveal_500ms_ease-out_both]">
                                 <p className="text-xs font-semibold tracking-[0.08em] uppercase text-muted">Report Summary</p>

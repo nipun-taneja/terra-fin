@@ -21,6 +21,19 @@ export async function verifyCRS(req: CRSRequest): Promise<CRSResponse> {
     return res.json();
 }
 
+export async function downloadCRSPdf(requestId: string, requestData: Record<string, unknown>): Promise<Blob> {
+    const res = await fetch(`${API_BASE}/api/credibility/pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            request_id: requestId,
+            request_data: requestData,
+        }),
+    });
+    if (!res.ok) throw new Error(`CRS PDF download failed: ${res.status}`);
+    return res.blob();
+}
+
 // ─── Field Analysis ──────────────────────────────────────────
 export async function analyzeField(field: FieldConfig): Promise<AnalyzeResponse> {
     const hectares =
