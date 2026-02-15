@@ -27,7 +27,6 @@ from ..models.farm_analysis_schemas import (  # type: ignore[import]
     LowHigh,
 )
 from .ingest import (  # type: ignore[import]
-    _ingest_request,
     create_farm,
     add_field,
     add_field_season,
