@@ -1,0 +1,16 @@
+{
+    "executionEnvironment": "python",
+    "include": [
+        "app",
+        "tests"
+    ],
+    "extraPaths": [
+        "."
+    ],
+    "pythonVersion": "3.11",
+    "typeCheckingMode": "basic",
+    "reportMissingImports": "warning",
+    "reportMissingTypeStubs": "none",
+    "venvPath": "C:\\Users\\sbokk\\anaconda3",
+    "pythonPlatform": "Windows"
+}

@@ -3,12 +3,12 @@ from __future__ import annotations
 
 import os
 import re
-from typing import Any, Optional, List
+from typing import Any, Optional, List, Dict
 
-import requests
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
-from dotenv import load_dotenv
+import requests  # type: ignore[import]
+from fastapi import APIRouter, HTTPException  # type: ignore[import]
+from pydantic import BaseModel, Field  # type: ignore[import]
+from dotenv import load_dotenv  # type: ignore[import]
 
 router = APIRouter()
 load_dotenv()
@@ -32,7 +32,7 @@ class CredibilityResponse(BaseModel):
     score: float  # 0..1
     flags: List[str]
     request_id: Optional[str] = None
-    report: Optional[dict[str, Any]] = None
+    report: Optional[Dict[str, Any]] = None
 
 
 def _parse_address(address: Optional[str]) -> tuple[str, str, str, str]:
@@ -163,10 +163,10 @@ def check_credibility(req: CredibilityRequest) -> CredibilityResponse:
         flags.append("empty_report")
     score = 0.9 if request_id else 0.8
 
-    return CredibilityResponse(
-        credible=len(flags) == 0,
-        score=score,
-        flags=flags,
-        request_id=request_id,
-        report=report_data,
-    )
+    return CredibilityResponse(**{
+        "credible": len(flags) == 0,
+        "score": float(score),
+        "flags": flags,
+        "request_id": request_id,
+        "report": report_data,
+    })

@@ -3,12 +3,12 @@ AI roadmap generator using Google Gemini.
 """
 import json
 import os
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple, Dict, Any, cast
 
-from dotenv import load_dotenv
-from google import genai
+from dotenv import load_dotenv  # type: ignore[import]
+from google import genai  # type: ignore[import]
 
-from app.models.schemas import RoadmapStep, SatelliteSummary
+from app.models.schemas import RoadmapStep, SatelliteSummary  # type: ignore[import]
 
 # Load .env once (safe even if called multiple times)
 load_dotenv()
@@ -123,7 +123,7 @@ def generate_maize_roadmap(
         prompt = _build_prompt(lat, lon, farm_size_hectares, satellite, baseline_tco2e_y)
 
         resp = client.models.generate_content(
-            model="gemini-2.5-flash-lite",
+            model="gemini-2.0-flash",
             contents=prompt,
             config={
                 "temperature": 0.4,
@@ -142,7 +142,7 @@ def generate_maize_roadmap(
                 RoadmapStep(
                     title=str(s["title"]),
                     why=str(s["why"]),
-                    actions=[str(a) for a in s["actions"]][:5],
+                    actions=list(cast(Any, s).get("actions", []))[:5],  # type: ignore[index]
                     expected_reduction_pct=(float(s["expected_reduction_pct"][0]), float(s["expected_reduction_pct"][1])),
                     upfront_cost_usd=(int(s["upfront_cost_usd"][0]), int(s["upfront_cost_usd"][1])),
                     timeline=str(s["timeline"]),
@@ -169,4 +169,4 @@ def aggregate_reduction_pct_range(roadmap: List[RoadmapStep]) -> Tuple[float, fl
     rmax = sum(step.expected_reduction_pct[1] for step in roadmap)
     rmin = max(0.0, min(70.0, rmin))
     rmax = max(rmin, min(80.0, rmax))
-    return (round(rmin, 1), round(rmax, 1))
+    return (float(round(float(rmin), 1)), float(round(float(rmax), 1)))  # type: ignore[call-overload]

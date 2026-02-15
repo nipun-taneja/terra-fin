@@ -1,14 +1,18 @@
 """
 Main analysis router orchestrating satellite, baseline, and AI generation.
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException  # type: ignore[import]
 
-from app.models.schemas import AnalyzeRequest, AnalyzeResponse, SatelliteSummary, RoadmapStep
-from app.services.satellite_provider import get_satellite_summary
-from app.services.baseline import estimate_maize_baseline_tco2e_y
-from app.services.ai_provider import generate_maize_roadmap, aggregate_reduction_pct_range
-from app.services.finance import compute_annual_savings_tco2e, compute_finance_offer
-from app.services.eng1_loader import load_eng1_analysis
+from ..models.schemas import AnalyzeRequest, AnalyzeResponse, SatelliteSummary, RoadmapStep  # type: ignore[import]
+from ..services.satellite_provider import get_satellite_summary  # type: ignore[import]
+from ..services.baseline import estimate_maize_baseline_tco2e_y  # type: ignore[import]
+from ..services.ai_provider import generate_maize_roadmap, aggregate_reduction_pct_range  # type: ignore[import]
+from ..services.finance import compute_annual_savings_tco2e, compute_finance_offer  # type: ignore[import]
+import logging
+from ..services.storage_mongo import save_analysis, get_db  # type: ignore[import]
+from ..services.eng1_loader import load_eng1_analysis  # type: ignore[import]
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -23,7 +27,7 @@ def _roadmap_from_eng1(eng1: dict) -> list[RoadmapStep] | None:
         return None
 
     steps: list[RoadmapStep] = []
-    for s in suggestions[:3]:
+    for s in suggestions[:3]:  # type: ignore[index]
         try:
             steps.append(
                 RoadmapStep(
@@ -61,6 +65,7 @@ def _annual_saved_from_eng1(eng1: dict) -> tuple[float, float] | None:
 
 @router.post("/api/analyze", response_model=AnalyzeResponse)
 def analyze(req: AnalyzeRequest) -> AnalyzeResponse:
+    print(f"DEBUG: analyze endpoint hit for lat={req.lat}, lon={req.lon}")
     if req.crop_type != "maize":
         raise HTTPException(status_code=400, detail="Only maize is supported in this demo.")
 
@@ -132,12 +137,23 @@ def analyze(req: AnalyzeRequest) -> AnalyzeResponse:
         emissions_percentile_est = 70.0 - (sat.ndvi_trend * 200.0)
         emissions_percentile_est = max(5.0, min(95.0, emissions_percentile_est))
 
-    return AnalyzeResponse(
+    analysis_id = save_analysis(
+        farm_name="Unknown", 
+        state="Unknown",
+        analysis_window={
+            "start_date": "2024-01-01",
+            "end_date": "2024-12-31",
+        },
+        result=req.model_dump() 
+    )
+
+    res = AnalyzeResponse(
+        analysis_id=analysis_id,
         location={"lat": req.lat, "lon": req.lon},
         crop_type="maize",
         satellite=sat,
         audit={
-            "emissions_percentile_est": round(float(emissions_percentile_est), 1),
+            "emissions_percentile_est": float(round(float(emissions_percentile_est), 1)),  # type: ignore[call-overload]
             "baseline_tco2e_y": float(baseline_t),
         },
         roadmap=roadmap,
@@ -149,3 +165,16 @@ def analyze(req: AnalyzeRequest) -> AnalyzeResponse:
             "repayment_note": "Offer assumes forward sale of projected reductions with a risk haircut.",
         },
     )
+
+    if analysis_id:
+        try:
+            db = get_db()
+            db.analyses.update_one(
+                {"analysis_id": analysis_id},
+                {"$set": {"result": res.model_dump()}}
+            )
+        except Exception:
+            # Silence internal DB errors if needed, or use a local logger
+            pass
+
+    return res

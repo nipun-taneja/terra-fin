@@ -35,4 +35,4 @@ def estimate_maize_baseline_tco2e_y(
     }.get(region or "global", 1.00)
 
     baseline = base_t_per_ha_y * region_multiplier * farm_size_hectares
-    return round(baseline, 2)
+    return float(round(float(baseline), 2))  # type: ignore[call-overload]

@@ -2,8 +2,8 @@
 Integration test for Google Gemini API connectivity.
 """
 import os
-from dotenv import load_dotenv
-from google import genai
+from dotenv import load_dotenv  # type: ignore[import]
+from google import genai  # type: ignore[import]
 
 load_dotenv()
 
