@@ -250,7 +250,8 @@ export default function RegisterView({ onVerified }: Props) {
                                     onClick={handleDownloadPdf}
                                     disabled={downloadingPdf || !crsResult?.request_id}
                                     aria-label="Download PDF Credit Report"
-                                    className="absolute top-4 right-4 h-10 w-10 rounded-full border border-[#D8D3C8] bg-white/80 inline-flex items-center justify-center text-[#2D3A31] hover:bg-white transition-colors disabled:opacity-50"
+                                    title="You can download your credit report here"
+                                    className="absolute top-4 right-4 h-10 w-10 rounded-full border-2 border-[#2D3A31]/40 bg-white/85 inline-flex items-center justify-center text-[#2D3A31] hover:bg-white transition-colors disabled:opacity-50"
                                 >
                                     {downloadingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                                 </button>
@@ -264,7 +265,8 @@ export default function RegisterView({ onVerified }: Props) {
                                     <div className="space-y-1">
                                         <div className="inline-flex items-center gap-1 text-[#6F7D73] text-xs font-semibold tracking-[0.08em] uppercase">
                                             <Sparkles className="h-3.5 w-3.5" />
-                                            <span className="text-sm font-bold text-[#2D3A31]">Identity Verified by CRS</span>
+                                            <span className="text-sm text-[#2D3A31]">Verified by</span>
+                                            <span className="text-sm font-bold text-[#2D3A31]">CRS</span>
                                         </div>
                                         <h3 className="font-display text-2xl leading-tight font-semibold">
                                             Welcome {welcomeFirstName},
